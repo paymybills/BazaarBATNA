@@ -1,0 +1,67 @@
+name: bazaarbot
+version: "1.0.0"
+description: >
+  Customer-vendor price negotiation environment with asymmetric information,
+  career dynamics, and Rubinstein bargaining theory. Simulates real-world
+  informal market negotiation (kirana stores, vendor stalls, service pricing).
+
+observation:
+  type: object
+  model: server.models.BazaarObservation
+  fields:
+    current_round: { type: integer, description: "Current negotiation round" }
+    max_rounds: { type: integer, description: "Maximum rounds in this episode" }
+    own_last_offer: { type: number, nullable: true, description: "Buyer's last offer" }
+    opponent_last_offer: { type: number, nullable: true, description: "Seller's current ask" }
+    own_private_budget: { type: number, description: "Buyer's private budget (hidden from seller)" }
+    rounds_remaining: { type: integer, description: "Rounds left in episode" }
+    seller_last_move_delta: { type: number, nullable: true, description: "How much seller conceded last round" }
+    item_name: { type: string, description: "Item being negotiated" }
+    seller_asking_price: { type: number, description: "Seller's opening anchor price" }
+    episode_number: { type: integer, description: "Current episode in career" }
+    total_episodes: { type: integer, description: "Total episodes in task" }
+    message: { type: string, description: "Seller's spoken message" }
+
+action:
+  type: object
+  model: server.models.BazaarAction
+  fields:
+    action: { type: string, enum: ["offer", "accept", "walk"], description: "Action type" }
+    price: { type: number, nullable: true, description: "Offer price (required for 'offer' action)" }
+
+reward:
+  type: object
+  model: server.models.BazaarReward
+  range: [0.0, 1.0]
+  partial_progress: true
+  fields:
+    reward: { type: number, description: "Step reward" }
+    terminal: { type: boolean, description: "Whether episode ended" }
+    components: { type: object, description: "Reward breakdown" }
+
+tasks:
+  single_deal:
+    difficulty: easy
+    description: "Single negotiation. Symmetric information. Moderate seller."
+    max_steps: 8
+    grader: "server.tasks.grade_single_deal"
+    success_threshold: 0.3
+
+  asymmetric_pressure:
+    difficulty: medium
+    description: "Hidden deadline + inventory pressure. Infer seller urgency."
+    max_steps: 8
+    grader: "server.tasks.grade_asymmetric_pressure"
+    success_threshold: 0.4
+
+  career_10:
+    difficulty: hard
+    description: "10 consecutive deals. Seller adapts to buyer patterns."
+    max_steps: 80
+    grader: "server.tasks.grade_career_10"
+    success_threshold: 0.5
+
+endpoints:
+  reset: { method: POST, path: /reset }
+  step: { method: POST, path: /step }
+  state: { method: GET, path: /state }

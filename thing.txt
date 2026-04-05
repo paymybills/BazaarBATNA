@@ -1,0 +1,96 @@
+The Task
+
+Build a complete, real-world OpenEnv environment that an AI agent can learn from through the standard  step() / reset() / state()  API.
+
+Key Requirements at a Glance
+
+Must simulate a real-world task (not games or toys)
+
+Implement full OpenEnv spec: typed models, step()/reset()/state(), openenv.yaml
+
+Minimum 3 tasks with agent graders (easy → medium → hard, scores/reward 0.0–1.0)
+
+Meaningful reward function with partial progress signals
+
+Baseline inference script with reproducible scores
+
+Deploy to Hugging Face Spaces + working Dockerfile
+
+README with environment description, action/observation spaces, setup instructions
+
+Functional Requirements
+
+Real-world task simulation
+
+The environment must simulate a task humans actually do. Not games, not toys. Examples: email triage, code review, data cleaning, scheduling, customer support, content moderation.
+
+OpenEnv spec compliance
+
+Implement the full OpenEnv interface: typed Observation, Action, and Reward Pydantic models. step(action) → returns observation, reward, done, info. reset() → returns initial observation. state() → returns current state. openenv.yaml with metadata. Tested via openenv validate.
+
+Minimum 3 tasks with agent graders
+
+Each task defines a concrete objective an agent must accomplish, with a programmatic grader that scores performance (0.0–1.0). Tasks should range: easy → medium → hard. Graders must have clear, deterministic success/failure criteria.
+
+Meaningful reward function
+
+Provides signal over the full trajectory (not just binary end-of-episode). Rewards partial progress toward task completion. Penalizes clearly undesirable behavior (e.g. infinite loops, destructive actions).
+
+Baseline inference script
+
+Uses the OpenAI API client to run a model against the environment. Reads API credentials from environment variables (OPENAI_API_KEY). Produces a reproducible baseline score on all 3 tasks.
+
+Detailed Requirements
+
+Non-Functional Requirements
+
+Deploys to a Hugging Face Space
+
+Environment must run as a containerized HF Space tagged with openenv.
+
+Containerized execution
+
+Must include a working Dockerfile. The environment should start cleanly with docker build + docker run.
+
+Documentation
+
+README must include: environment description and motivation, action and observation space definitions, task descriptions with expected difficulty, setup and usage instructions, baseline scores.
+
+
+
+
+
+
+When Round 1 opens, you'll choose 1 of 4–5 problem statements and build an OpenEnv environment around it.
+
+Example of what a problem statement looks like
+
+"Build a mini-game RL environment with clearly defined tasks, automated graders, and reward logic using the OpenEnv framework."
+
+→ Create a mini-game an AI agent can play
+
+→ Define tasks with increasing difficulty
+
+→ Write graders that verify task completion
+
+→ Define reward logic for scoring
+
+→ Package using OpenEnv for automated evaluation
+
+Evaluation Criteria
+
+Runtime correctness
+
+Runs without errors
+
+Interface compliance
+
+Follows OpenEnv standard
+
+Task design
+
+ Clear, realistic, testable
+
+Grading logic
+
+ Reward system makes sense

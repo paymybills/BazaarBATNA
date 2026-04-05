@@ -1,0 +1,188 @@
+{
+    "project": "BazaarBot",
+    "tagline": "OpenEnv task environment simulating real-world customer-vendor price negotiation with asymmetric information, career dynamics, and Rubinstein bargaining theory",
+    "what_you_are_building": {
+        "NOT": "a trained RL policy",
+        "YES": "a task environment + grader + reward signal that an LLM agent navigates",
+        "artifacts": [
+            "Pydantic models: BazaarObservation, BazaarAction, BazaarReward",
+            "FastAPI server on HF Spaces with step()/reset()/state() endpoints",
+            "Rule-based seller opponent (credible counterparty, not trained)",
+            "Three task configs with deterministic graders",
+            "Inference script: LLM buyer agent with engineered system prompt",
+            "openenv.yaml, Dockerfile, README"
+        ]
+    },
+    "agent_architecture": {
+        "type": "LLM-as-agent",
+        "frame": "Frozen LLM receives text observation each step, reasons, outputs structured action JSON",
+        "inference_loop": "env.reset() -> prompt LLM -> env.step(action) -> repeat until done",
+        "client": "OpenAI client only, reads from API_BASE_URL + MODEL_NAME + HF_TOKEN env vars",
+        "action_output_format": "{\"action\": \"offer\"|\"accept\"|\"walk\", \"price\": <float or null>}"
+    },
+    "real_world_framing": {
+        "required_by_spec": "Must simulate a real-world task, not games or toys",
+        "our_frame": "Customer-vendor negotiation simulation. Informal market dynamics -- kirana stores, vendor stalls, service pricing. Negotiation is the default transaction mode in these contexts.",
+        "adjacent_to_spec_examples": "customer support, scheduling -- negotiation sits in the same category"
+    },
+    "core_philosophy": {
+        "frame": "Not a single negotiation. A career. Agent plays consecutive deals against the same counterparty. Strategy must survive the full distribution, not win one hand.",
+        "key_insight": "Hidden information does the work that discount factors fail to do. Time pressure becomes a bluffing surface, not a folding trigger."
+    },
+    "three_fundamental_tensions": {
+        "house_doesnt_need_you": {
+            "problem": "Seller has outside options, so rejection is costless. Buyer gets no learning signal.",
+            "fix": "BATNA is stochastic and costly. Seller outside option arrives with probability p per round, but waiting has a time cost. Rejecting is no longer free."
+        },
+        "folding_is_trivially_optimal": {
+            "problem": "If reward is binary deal/no-deal, buyer learns to accept first offer immediately.",
+            "fix": "Reward is deal quality, not deal existence. Buyer reward = (budget - agreed_price). Caving is explicitly punished."
+        },
+        "seller_too_rigid": {
+            "problem": "Seller anchors high and never moves if rigidity has no cost.",
+            "fix": "Non-linear time discount. Cheap to wait early, exponentially expensive near deadline. alpha * exp(beta * t/T). Probing is free early, stalling is punished late."
+        }
+    },
+    "critical_constraint": {
+        "asymmetric_time_pressure": "Discount factor must be asymmetric and private. Buyer has a deadline seller cannot observe. Seller has spoilage cost buyer cannot observe. Neither agent can default to fold because they cannot infer the other's urgency. Urgency inference from offer trajectory becomes the actual learning problem.",
+        "warning": "Flat per-round discount collapses to folding pressure. delta too high = seller anchors forever. delta too low = buyer folds round 1. Non-linear asymmetric private costs are mandatory."
+    },
+    "career_dynamics": {
+        "frame": "Agent gets no days off. Continuous arduous rounds like a poker bot running 10k hands.",
+        "what_carries_across_episodes": {
+            "reputation": "Running score of buyer capitulation rate over last K deals. Seller observes and exploits patterns.",
+            "bankroll": "Buyer has finite total budget across sessions. Overpaying episode 1 constrains episode 2.",
+            "seller_inventory": "Seller has N units to move. High stock = early desperation. Low stock = rigidity."
+        },
+        "why_it_matters": "Single-episode agent learns to win one negotiation. Career agent learns to manage information leakage. Don't reveal urgency patterns because opponent is watching history across deals.",
+        "repeated_game_note": "Folk theorem applies. Same counterparty every session like a kirana vendor you visit weekly. Cooperation and reputation become rational strategies, not just nice-to-haves."
+    },
+    "observation_space": {
+        "current_negotiation": [
+            "current_round t",
+            "own_last_offer",
+            "opponent_last_offer",
+            "own_private_deadline (not shared with seller)",
+            "own_private_budget (not shared with seller)",
+            "rounds_remaining",
+            "seller_last_move_delta (how much seller moved last round -- signals urgency)"
+        ],
+        "career_history_buffer": [
+            "last K deal outcomes (deal/walk/expired)",
+            "last K agreed prices normalized by (budget - cost)",
+            "last K rounds-to-close",
+            "own capitulation rate over last K deals",
+            "opponent offer velocity over last K deals"
+        ],
+        "encoding_for_llm_prompt": "All fields serialized as readable key-value text block. Career history rendered as a short table of past deals. LLM receives this as the user turn each step."
+    },
+    "action_space": {
+        "type": "continuous offer + discrete terminal actions",
+        "buyer_action": "offer price in [0, budget]",
+        "seller_action": "rule-based, not LLM-controlled",
+        "also_available": [
+            "accept",
+            "walk"
+        ],
+        "note": "Walk is available but career bankroll and reputation consequences make it non-trivially costly"
+    },
+    "seller_opponent": {
+        "type": "rule-based, not trained",
+        "behavior": "anchors at 2x cost, concedes by fixed pct per round scaled by inventory pressure and BATNA probability, accepts if offer exceeds reserve price",
+        "concession_rule": "counteroffer_t = anchor * (1 - concession_rate * t) where concession_rate scales with inventory_pressure",
+        "note": "Seller does not need to be an LLM or trained model. It just needs to be a credible counterparty that creates genuine tension and is exploitable by a smart buyer."
+    },
+    "reward_function": {
+        "partial_progress_signal": "Each round where offer gap narrows gives small positive signal: +0.05 * (gap_reduction / initial_gap). Required by spec -- reward must cover full trajectory not just terminal.",
+        "buyer_terminal": "agreed_price present: (budget - agreed_price) / (budget - cost) * delta(t) - lambda * reputation_leak. Walk: -walk_penalty.",
+        "seller_terminal": "agreed_price present: (agreed_price - cost) / (anchor_0 - cost) * delta(t). Walk: -walk_penalty * inventory_pressure.",
+        "time_discount": "delta(t) = exp(-alpha * exp(beta * t/T)). Flat early, steep late. alpha=0.3, beta=2.5.",
+        "reputation_leak_penalty": "proportional to correlation of own offer deltas over last K episodes. Predictable trajectory = penalized.",
+        "undesirable_behavior_penalties": [
+            "stalling: same offer repeated 3+ rounds: -0.1 per repeat",
+            "out-of-range offer: offer > budget or offer < 0: -0.2 and offer clipped",
+            "infinite loop protection: auto-walk with max penalty if MAX_STEPS exceeded"
+        ],
+        "normalization": "All terminal rewards normalized to [0, 1] per submission spec."
+    },
+    "task_registry": {
+        "note": "Minimum 3 tasks required. Each has a deterministic grader returning score in [0, 1]. Easy -> medium -> hard progression required by spec.",
+        "single_deal": {
+            "difficulty": "easy",
+            "description": "Buyer negotiates one deal. Symmetric information. No career history. Seller concedes at moderate rate.",
+            "max_steps": 8,
+            "grader": "(budget - agreed_price) / (budget - cost), clamped [0,1]. 0 on walk or no-deal.",
+            "success_threshold": 0.3
+        },
+        "asymmetric_pressure": {
+            "difficulty": "medium",
+            "description": "Buyer has hidden hard deadline at round 5. Seller has hidden inventory pressure. Agent must infer seller urgency from offer velocity and close before deadline.",
+            "max_steps": 8,
+            "grader": "surplus_score * deadline_bonus. deadline_bonus = 1.0 if closed before round 5, 0.5 if closed after, 0 if walk.",
+            "success_threshold": 0.4
+        },
+        "career_10": {
+            "difficulty": "hard",
+            "description": "Buyer plays 10 consecutive deals against same seller. Career history active. Seller adapts concession rate based on buyer's historical capitulation rate. Agent must manage reputation across episodes.",
+            "max_steps": 80,
+            "grader": "mean normalized surplus over 10 episodes, weighted by round_efficiency (deals closed faster score higher).",
+            "success_threshold": 0.5
+        }
+    },
+    "hackathon_submission_requirements": {
+        "platform": "HuggingFace OpenEnv",
+        "checklist": {
+            "hf_space_deploys": "Automated ping to Space URL must return 200 and respond to reset()",
+            "openenv_spec_compliance": "Validate openenv.yaml with typed models, step()/reset()/state() endpoints",
+            "dockerfile_builds": "Automated docker build on submitted repo must succeed",
+            "dockerfile_location": "Root or server/ subdirectory. Build must complete within 600 seconds.",
+            "baseline_reproduces": "Submitted inference script must complete without error and produce scores",
+            "minimum_tasks": "3+ tasks with graders, each scoring in [0, 1] range, easy -> medium -> hard",
+            "infra_constraints": "Runtime under 20min, vcpu=2, memory=8gb",
+            "validator": "Run pre-submission validation script before submitting",
+            "hf_space_endpoint": "POST to <space-url>/reset must return HTTP 200. Must be live before submission.",
+            "openenv_validate_cmd": "pip install openenv-core, then run openenv validate from repo root before submitting."
+        },
+        "mandatory_env_vars": {
+            "API_BASE_URL": "The API endpoint for the LLM",
+            "MODEL_NAME": "The model identifier to use for inference",
+            "HF_TOKEN": "Your HuggingFace / API key",
+            "LOCAL_IMAGE_NAME": "Docker image name if using from_docker_image()"
+        },
+        "inference_script_rules": {
+            "filename": "inference.py in root directory",
+            "llm_client": "Must use OpenAI client for all LLM calls",
+            "stdout_format": {
+                "start": "[START] task=<task_name> env=<benchmark> model=<model_name>",
+                "step": "[STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>",
+                "end": "[END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>",
+                "rules": [
+                    "One [START] line at episode begin",
+                    "One [STEP] line per step immediately after env.step() returns",
+                    "One [END] line after env.close(), always emitted even on exception",
+                    "reward and rewards formatted to 2 decimal places",
+                    "done and success are lowercase booleans: true or false",
+                    "error is raw last_action_error string or null if none",
+                    "All fields on single line, no newlines within a line",
+                    "Score must be in [0, 1]"
+                ]
+            }
+        }
+    },
+    "india_framing": {
+        "cultural_grounding": "Kirana stores, local vendors, auto drivers, real estate brokers. Informal negotiation is the default transaction mode.",
+        "demo_story": "Naive LLM agent gets exploited by anchoring. Prompted agent learns to probe, bluff urgency, and converge near Nash equilibrium. Career agent learns vendor tells after 10 sessions.",
+        "academic_grounding": "Rubinstein alternating offers model, Nash bargaining solution, Folk theorem for repeated games"
+    },
+    "datasets_if_needed": {
+        "craigslist_bargaining": "He et al. 2018. 6k real human price negotiation dialogues. Use to calibrate offer distributions or as behavioral benchmark.",
+        "deal_or_no_deal": "Facebook AI. Structured negotiation over item splits. Same game theory structure."
+    },
+    "hackathon_demo_arc": [
+        "Show naive LLM agent: accepts near anchor price, 30% surplus captured",
+        "Show prompted agent on single_deal: probes seller, closes near midpoint, 60-70% surplus",
+        "Show prompted agent on asymmetric_pressure: reads seller velocity, closes before deadline",
+        "Show career_10: agent adapts across sessions, manages reputation, seller cannot exploit capitulation pattern",
+        "Live visualization: offer trajectories per round, surplus score per task, career history table"
+    ]
+}

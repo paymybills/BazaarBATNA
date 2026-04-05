@@ -1,0 +1,8 @@
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.5.0
+requests>=2.31.0
+openai>=1.6.0
+streamlit>=1.29.0
+plotly>=5.18.0
+pandas>=2.1.0
