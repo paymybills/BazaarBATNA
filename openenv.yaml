@@ -65,3 +65,6 @@ endpoints:
   reset: { method: POST, path: /reset }
   step: { method: POST, path: /step }
   state: { method: GET, path: /state }
+  score: { method: GET, path: /score }
+  health: { method: GET, path: /health }
+  tasks: { method: GET, path: /tasks }

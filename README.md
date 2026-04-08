@@ -1,3 +1,13 @@
+---
+title: BazaarBATNA
+emoji: 🪬
+colorFrom: yellow
+colorTo: orange
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # BazaarBot
 
 **An OpenEnv task environment simulating real-world customer-vendor price negotiation with asymmetric information, career dynamics, and Rubinstein bargaining theory.**
