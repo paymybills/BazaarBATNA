@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from .environment import BazaarEnvironment
@@ -73,14 +74,58 @@ def _get_env(session_id: str = "default") -> BazaarEnvironment:
 
 # ── Endpoints ─────────────────────────────────────────────────────
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return {
-        "name": "BazaarBot",
-        "description": "Customer-vendor negotiation environment",
-        "tasks": list(TASKS.keys()),
-        "endpoints": ["/reset", "/step", "/state", "/score", "/tasks"],
-    }
+    task_rows = "".join(
+        f"<tr><td><code>{name}</code></td><td>{t.difficulty.capitalize()}</td><td>{t.description}</td></tr>"
+        for name, t in TASKS.items()
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BazaarBATNA</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; max-width: 860px; margin: 60px auto; padding: 0 24px; color: #1a1a1a; }}
+    h1 {{ font-size: 2rem; margin-bottom: 4px; }}
+    .subtitle {{ color: #555; margin-bottom: 32px; }}
+    .badge {{ display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }}
+    .running {{ background: #d1fae5; color: #065f46; }}
+    table {{ width: 100%; border-collapse: collapse; margin: 16px 0 32px; }}
+    th {{ text-align: left; padding: 8px 12px; background: #f4f4f5; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; }}
+    td {{ padding: 8px 12px; border-top: 1px solid #e4e4e7; font-size: 0.9rem; vertical-align: top; }}
+    code {{ background: #f4f4f5; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }}
+    .method {{ font-size: 0.75rem; font-weight: 700; color: #fff; padding: 2px 7px; border-radius: 4px; }}
+    .post {{ background: #f59e0b; }}
+    .get {{ background: #3b82f6; }}
+    a {{ color: #2563eb; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+  </style>
+</head>
+<body>
+  <h1>🪬 BazaarBATNA</h1>
+  <p class="subtitle">Customer-vendor price negotiation environment &nbsp;·&nbsp; <span class="badge running">● Running</span></p>
+
+  <h2>Tasks</h2>
+  <table>
+    <tr><th>Name</th><th>Difficulty</th><th>Description</th></tr>
+    {task_rows}
+  </table>
+
+  <h2>Endpoints</h2>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="method post">POST</span></td><td><code>/reset</code></td><td>Start a new episode. Body: <code>{{"task": "single_deal", "seed": 42}}</code></td></tr>
+    <tr><td><span class="method post">POST</span></td><td><code>/step</code></td><td>Submit buyer action. Body: <code>{{"action": "offer", "price": 35.0}}</code></td></tr>
+    <tr><td><span class="method get">GET</span></td><td><code>/state</code></td><td>Full environment state</td></tr>
+    <tr><td><span class="method get">GET</span></td><td><code>/score</code></td><td>Graded score for current task</td></tr>
+    <tr><td><span class="method get">GET</span></td><td><code>/tasks</code></td><td>List available tasks</td></tr>
+    <tr><td><span class="method get">GET</span></td><td><code>/health</code></td><td>Health check</td></tr>
+  </table>
+
+  <p><a href="/docs">Interactive API docs →</a></p>
+</body>
+</html>"""
 
 
 @app.get("/tasks")
