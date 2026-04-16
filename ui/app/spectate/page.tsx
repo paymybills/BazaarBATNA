@@ -33,7 +33,6 @@ interface SimResult {
 
 interface ProviderInfo {
   name: string;
-  default_model: string;
   models: string[];
 }
 
@@ -51,8 +50,8 @@ export default function SpectatePage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  // LLM config
-  const [llmProvider, setLlmProvider] = useState("openai");
+  // LLM config — no defaults, user picks everything
+  const [llmProvider, setLlmProvider] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmModel, setLlmModel] = useState("");
 
@@ -72,11 +71,10 @@ export default function SpectatePage() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [replayStep]);
 
-  // Update default model when provider changes
+  // Reset model when provider changes
   useEffect(() => {
-    const p = providers[llmProvider];
-    if (p) setLlmModel(p.default_model);
-  }, [llmProvider, providers]);
+    setLlmModel("");
+  }, [llmProvider]);
 
   const runSimulation = useCallback(async () => {
     setLoading(true);
@@ -96,14 +94,24 @@ export default function SpectatePage() {
 
       // LLM config
       if (strategy === "llm") {
+        if (!llmProvider) {
+          setError("Select a provider");
+          setLoading(false);
+          return;
+        }
+        if (!llmModel) {
+          setError("Select a model");
+          setLoading(false);
+          return;
+        }
         if (!llmApiKey) {
-          setError("API key required for LLM strategy");
+          setError("Enter your API key");
           setLoading(false);
           return;
         }
         body.llm_provider = llmProvider;
         body.llm_api_key = llmApiKey;
-        body.llm_model = llmModel || undefined;
+        body.llm_model = llmModel;
       }
 
       const res = await apiPost<SimResult>("/simulate", body);
@@ -234,6 +242,7 @@ export default function SpectatePage() {
                 onChange={(e) => setLlmProvider(e.target.value)}
                 className="bg-surface-2 border border-border rounded px-3 py-1.5 text-sm"
               >
+                <option value="" disabled>Choose provider...</option>
                 {Object.entries(providers).map(([key, p]) => (
                   <option key={key} value={key}>{p.name}</option>
                 ))}
@@ -245,7 +254,11 @@ export default function SpectatePage() {
                 value={llmModel}
                 onChange={(e) => setLlmModel(e.target.value)}
                 className="bg-surface-2 border border-border rounded px-3 py-1.5 text-sm"
+                disabled={!llmProvider}
               >
+                <option value="" disabled>
+                  {llmProvider ? "Choose model..." : "Select provider first"}
+                </option>
                 {(providers[llmProvider]?.models ?? []).map((m) => (
                   <option key={m} value={m}>{m}</option>
                 ))}

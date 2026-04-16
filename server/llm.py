@@ -24,36 +24,63 @@ PROVIDERS = {
     "openai": {
         "name": "OpenAI",
         "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-4o-mini",
-        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano", "o4-mini"],
+        "models": [
+            "gpt-4o", "gpt-4o-mini",
+            "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+            "o4-mini", "o3", "o3-mini",
+            "gpt-4-turbo", "gpt-3.5-turbo",
+        ],
         "openai_compatible": True,
     },
     "anthropic": {
         "name": "Anthropic (Claude)",
         "base_url": "https://api.anthropic.com/v1",
-        "default_model": "claude-sonnet-4-20250514",
-        "models": ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514"],
+        "models": [
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-20250514",
+            "claude-sonnet-4-6-20250627",
+            "claude-haiku-4-5-20251001",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+        ],
         "openai_compatible": False,
     },
     "gemini": {
         "name": "Google Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.0-flash",
-        "models": ["gemini-2.0-flash", "gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-05-06"],
+        "models": [
+            "gemini-2.5-pro-preview-05-06",
+            "gemini-2.5-flash-preview-05-20",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+        ],
         "openai_compatible": True,
     },
     "huggingface": {
         "name": "HuggingFace",
         "base_url": "https://router.huggingface.co/v1",
-        "default_model": "Qwen/Qwen2.5-72B-Instruct",
-        "models": ["Qwen/Qwen2.5-72B-Instruct", "meta-llama/Llama-3.3-70B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"],
+        "models": [
+            "Qwen/Qwen2.5-72B-Instruct",
+            "Qwen/Qwen3-235B-A22B",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "mistralai/Mistral-Small-24B-Instruct-2501",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            "deepseek-ai/DeepSeek-R1",
+            "google/gemma-2-27b-it",
+        ],
         "openai_compatible": True,
     },
     "grok": {
         "name": "xAI (Grok)",
         "base_url": "https://api.x.ai/v1",
-        "default_model": "grok-3-mini",
-        "models": ["grok-3-mini", "grok-3"],
+        "models": [
+            "grok-3",
+            "grok-3-mini",
+            "grok-2",
+        ],
         "openai_compatible": True,
     },
 }
@@ -195,7 +222,7 @@ def call_llm(
     if not config:
         raise ValueError(f"Unknown provider: {provider}. Available: {list(PROVIDERS.keys())}")
 
-    model = model or config["default_model"]
+    model = model or config["models"][0]
     user_prompt = _build_user_prompt(obs, history)
 
     if provider == "anthropic":

@@ -420,7 +420,6 @@ async def list_providers():
     return {
         name: {
             "name": p["name"],
-            "default_model": p["default_model"],
             "models": p["models"],
         }
         for name, p in PROVIDERS.items()
