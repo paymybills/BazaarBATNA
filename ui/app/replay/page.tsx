@@ -103,8 +103,36 @@ export default function ReplayPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm mb-4">
-          {error}
+        <div className="p-4 rounded-lg bg-surface border border-border text-sm mb-4 space-y-3">
+          <p className="text-foreground/60">{error}</p>
+          <div className="flex gap-3">
+            <a
+              href="/negotiate"
+              className="px-3 py-1.5 bg-accent text-background rounded text-sm font-medium hover:bg-accent/90"
+            >
+              Play as Buyer
+            </a>
+            <a
+              href="/spectate"
+              className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm font-medium hover:bg-purple-700"
+            >
+              Watch AI Play
+            </a>
+            <button
+              onClick={async () => {
+                try {
+                  setError(null);
+                  await apiPost("/simulate", { task: "single_deal", strategy: "smart", seed: 42 });
+                  await loadState();
+                } catch (e) {
+                  setError(`Failed: ${e}`);
+                }
+              }}
+              className="px-3 py-1.5 bg-surface-2 border border-border rounded text-sm hover:bg-border"
+            >
+              Quick Simulate & Load
+            </button>
+          </div>
         </div>
       )}
 

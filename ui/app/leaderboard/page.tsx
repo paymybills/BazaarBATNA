@@ -63,8 +63,15 @@ export default function LeaderboardPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm mb-4">
-          {error}
+        <div className="p-4 rounded-lg bg-surface border border-border text-sm mb-4">
+          <p className="text-foreground/60 mb-2">
+            {error.includes("404")
+              ? "Leaderboard endpoint not available. The backend may need to be updated."
+              : error}
+          </p>
+          <p className="text-xs text-foreground/40">
+            Make sure the backend is running the latest version with /leaderboard support.
+          </p>
         </div>
       )}
 

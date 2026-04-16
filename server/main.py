@@ -16,6 +16,7 @@ from .arena import MultiBuyerArena
 from .environment import BazaarEnvironment
 from .leaderboard import get_best_scores, get_leaderboard, record_score
 from .models import (
+    ActionType,
     ArenaAction,
     ArenaState,
     BazaarAction,
@@ -334,6 +335,375 @@ async def score() -> ScoreResponse:
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "2.0.0"}
+
+
+# ── Simulate (AI auto-play for spectator mode) ──────────────────
+
+class SimulateRequest(BaseModel):
+    task: str = "single_deal"
+    strategy: str = "smart"  # "smart", "naive", "aggressive"
+    seed: Optional[int] = None
+    seller_personality: Optional[str] = None
+    speed_ms: int = 0  # 0 = return all at once
+
+
+class SellerModeStepRequest(BaseModel):
+    """User plays as seller: set your counteroffer price."""
+    price: float
+
+
+def _ai_buyer_action(obs: BazaarObservation, strategy: str, rng) -> BazaarAction:
+    """Built-in AI buyer strategies for spectator / seller mode."""
+    budget = obs.own_private_budget
+    ask = obs.seller_asking_price
+    opp = obs.opponent_last_offer or ask
+
+    if strategy == "naive":
+        if obs.current_round == 0:
+            return BazaarAction(action="offer", price=round(ask * 0.8, 2))
+        if obs.current_round >= 2:
+            return BazaarAction(action="accept")
+        return BazaarAction(action="offer", price=round(ask * 0.85, 2))
+
+    elif strategy == "aggressive":
+        target = budget * 0.35
+        if obs.current_round == 0:
+            return BazaarAction(action="offer", price=round(target * 0.7, 2))
+        if opp <= target * 1.1:
+            return BazaarAction(action="accept")
+        if obs.rounds_remaining <= 1:
+            return BazaarAction(action="walk")
+        step_up = target * (0.7 + 0.05 * obs.current_round)
+        return BazaarAction(action="offer", price=round(min(step_up, target), 2))
+
+    else:  # smart
+        if obs.current_round == 0:
+            return BazaarAction(action="offer", price=round(ask * 0.4, 2))
+
+        seller_velocity = obs.seller_last_move_delta or 0
+        own_move = budget * 0.02 if seller_velocity > ask * 0.05 else budget * 0.05
+        last = obs.own_last_offer or (ask * 0.4)
+        next_offer = last + own_move
+
+        if obs.own_private_deadline and obs.current_round >= obs.own_private_deadline - 1:
+            next_offer = min(opp * 0.95, budget * 0.7)
+            if obs.current_round >= obs.own_private_deadline:
+                return BazaarAction(action="accept")
+
+        if opp <= budget * 0.55:
+            return BazaarAction(action="accept")
+        if obs.rounds_remaining <= 1 and opp > budget * 0.75:
+            return BazaarAction(action="walk")
+        if obs.rounds_remaining <= 1:
+            return BazaarAction(action="accept")
+
+        # Read tells if available
+        if obs.tells and obs.tells.verbal_deception_cue > 0.4:
+            next_offer *= 0.92  # hold firmer against bluffers
+
+        if obs.career_history and obs.career_history.capitulation_rate > 0.3:
+            next_offer *= 0.95
+
+        next_offer = max(next_offer, ask * 0.3)
+        next_offer = min(next_offer, budget * 0.7)
+        return BazaarAction(action="offer", price=round(next_offer, 2))
+
+
+@app.post("/simulate")
+async def simulate(req: SimulateRequest):
+    """Run a full AI-vs-seller negotiation and return the complete history.
+
+    Used for spectator mode — watch an AI agent negotiate in real-time.
+    """
+    if req.task not in TASKS:
+        raise HTTPException(status_code=400, detail=f"Unknown task: {req.task}")
+
+    task = copy.deepcopy(TASKS[req.task])
+    if req.seller_personality:
+        task.seller_personality = SellerPersonalityType(req.seller_personality)
+
+    env = BazaarEnvironment(task, seed=req.seed)
+    _envs["spectator"] = env
+
+    import random
+    rng = random.Random(req.seed)
+
+    steps = []
+    for ep in range(task.total_episodes):
+        obs = env.reset()
+        steps.append({
+            "round": 0,
+            "episode": ep + 1,
+            "actor": "seller",
+            "action": "open",
+            "price": obs.seller_asking_price,
+            "message": obs.message,
+            "reward": 0,
+            "done": False,
+            "tells": obs.tells.model_dump() if obs.tells else None,
+        })
+
+        max_rounds = task.max_steps if task.total_episodes == 1 else task.max_steps // task.total_episodes
+        for r in range(1, max_rounds + 1):
+            if env.done:
+                break
+
+            action = _ai_buyer_action(obs, req.strategy, rng)
+            obs, reward_obj = env.step(action)
+
+            steps.append({
+                "round": r,
+                "episode": ep + 1,
+                "actor": "buyer",
+                "action": action.action.value if hasattr(action.action, 'value') else action.action,
+                "price": action.price,
+                "buyer_offer": action.price,
+                "seller_offer": obs.opponent_last_offer,
+                "message": obs.message,
+                "reward": reward_obj.reward,
+                "reward_components": reward_obj.components,
+                "done": obs.done,
+                "outcome": obs.deal_outcome.value if obs.deal_outcome else None,
+                "tells": obs.tells.model_dump() if obs.tells else None,
+            })
+
+            if obs.done:
+                break
+
+    grader = GRADERS.get(task.name)
+    final_score = grader(env.episode_results, task) if grader else 0.0
+
+    return {
+        "steps": steps,
+        "score": round(final_score, 4),
+        "task": task.name,
+        "strategy": req.strategy,
+        "personality": task.seller_personality.value,
+        "episodes": len(env.episode_results),
+        "state": env.get_state().model_dump(),
+    }
+
+
+# ── Seller mode (user plays as seller, AI is buyer) ─────────────
+
+class SellerModeResetRequest(BaseModel):
+    task: str = "single_deal"
+    strategy: str = "smart"
+    seed: Optional[int] = None
+    opening_price: float = 60.0
+
+
+@app.post("/seller-mode/reset")
+async def seller_mode_reset(req: SellerModeResetRequest):
+    """Start a seller-mode session. User plays as seller, AI plays as buyer."""
+    if req.task not in TASKS:
+        raise HTTPException(status_code=400, detail=f"Unknown task: {req.task}")
+
+    task = copy.deepcopy(TASKS[req.task])
+    # Store seller mode state
+    import random
+    session = {
+        "task": task,
+        "strategy": req.strategy,
+        "rng": random.Random(req.seed),
+        "round": 0,
+        "max_rounds": task.max_steps if task.total_episodes == 1 else task.max_steps // task.total_episodes,
+        "buyer_budget": task.buyer_budget,
+        "seller_cost": task.seller_cost,
+        "current_seller_price": req.opening_price,
+        "last_buyer_offer": None,
+        "history": [],
+        "done": False,
+        "outcome": None,
+    }
+    _envs["seller_mode"] = session  # type: ignore
+
+    # AI buyer sees the opening price
+    obs = BazaarObservation(
+        current_round=0,
+        max_rounds=session["max_rounds"],
+        opponent_last_offer=req.opening_price,
+        own_private_budget=task.buyer_budget,
+        rounds_remaining=session["max_rounds"],
+        seller_asking_price=req.opening_price,
+        item_name="handwoven silk scarf",
+        message=f"You open at {req.opening_price:.0f} rupees.",
+    )
+
+    # AI buyer makes first offer
+    action = _ai_buyer_action(obs, req.strategy, session["rng"])
+    session["round"] = 1
+    session["last_buyer_offer"] = action.price
+    session["history"].append({
+        "round": 0,
+        "actor": "seller",
+        "action": "open",
+        "price": req.opening_price,
+    })
+    session["history"].append({
+        "round": 1,
+        "actor": "buyer",
+        "action": action.action.value if hasattr(action.action, 'value') else action.action,
+        "price": action.price,
+    })
+
+    buyer_msg = (
+        f"Buyer offers {action.price:.0f} rupees."
+        if action.action in ("offer", "OFFER", ActionType.OFFER)
+        else f"Buyer {action.action}s."
+    )
+
+    return {
+        "round": 1,
+        "buyer_action": action.action.value if hasattr(action.action, 'value') else action.action,
+        "buyer_price": action.price,
+        "message": buyer_msg,
+        "your_opening": req.opening_price,
+        "history": session["history"],
+        "done": False,
+    }
+
+
+@app.post("/seller-mode/step")
+async def seller_mode_step(req: SellerModeStepRequest):
+    """User (as seller) sets counteroffer price. AI buyer responds."""
+    if "seller_mode" not in _envs:
+        raise HTTPException(status_code=400, detail="No seller-mode session. Call /seller-mode/reset first.")
+
+    session = _envs["seller_mode"]
+    if session["done"]:
+        return {"message": "Negotiation is over.", "done": True, "history": session["history"]}
+
+    seller_price = req.price
+    session["current_seller_price"] = seller_price
+    session["round"] += 1
+    rnd = session["round"]
+
+    session["history"].append({
+        "round": rnd,
+        "actor": "seller",
+        "action": "counter",
+        "price": seller_price,
+    })
+
+    # Check if seller accepted buyer's offer (seller price <= buyer's offer)
+    if session["last_buyer_offer"] is not None and seller_price <= session["last_buyer_offer"]:
+        session["done"] = True
+        session["outcome"] = "deal"
+        agreed = session["last_buyer_offer"]
+        surplus = session["buyer_budget"] - agreed
+        max_surplus = session["buyer_budget"] - session["seller_cost"]
+        buyer_score = max(0, surplus / max_surplus) if max_surplus > 0 else 0
+
+        return {
+            "round": rnd,
+            "message": f"You accepted the buyer's offer of {agreed:.0f}! Deal closed.",
+            "buyer_action": "deal",
+            "buyer_price": agreed,
+            "done": True,
+            "outcome": "deal",
+            "agreed_price": agreed,
+            "buyer_score": round(buyer_score, 4),
+            "seller_profit": agreed - session["seller_cost"],
+            "history": session["history"],
+        }
+
+    # Build observation for AI buyer
+    obs = BazaarObservation(
+        current_round=rnd,
+        max_rounds=session["max_rounds"],
+        own_last_offer=session["last_buyer_offer"],
+        opponent_last_offer=seller_price,
+        own_private_budget=session["buyer_budget"],
+        rounds_remaining=max(0, session["max_rounds"] - rnd),
+        seller_asking_price=session["history"][0]["price"],
+        item_name="handwoven silk scarf",
+        message=f"Seller counters: {seller_price:.0f} rupees.",
+    )
+
+    # Check expired
+    if rnd >= session["max_rounds"]:
+        session["done"] = True
+        session["outcome"] = "expired"
+        return {
+            "round": rnd,
+            "message": "Time's up! No deal reached.",
+            "buyer_action": "expired",
+            "buyer_price": None,
+            "done": True,
+            "outcome": "expired",
+            "history": session["history"],
+        }
+
+    # AI buyer responds
+    action = _ai_buyer_action(obs, session["strategy"], session["rng"])
+
+    if action.action in ("accept", ActionType.ACCEPT):
+        session["done"] = True
+        session["outcome"] = "deal"
+        agreed = seller_price
+        surplus = session["buyer_budget"] - agreed
+        max_surplus = session["buyer_budget"] - session["seller_cost"]
+        buyer_score = max(0, surplus / max_surplus) if max_surplus > 0 else 0
+
+        session["history"].append({
+            "round": rnd,
+            "actor": "buyer",
+            "action": "accept",
+            "price": seller_price,
+        })
+
+        return {
+            "round": rnd,
+            "message": f"Buyer accepts your price of {seller_price:.0f}! Deal closed.",
+            "buyer_action": "accept",
+            "buyer_price": seller_price,
+            "done": True,
+            "outcome": "deal",
+            "agreed_price": seller_price,
+            "buyer_score": round(buyer_score, 4),
+            "seller_profit": seller_price - session["seller_cost"],
+            "history": session["history"],
+        }
+
+    elif action.action in ("walk", ActionType.WALK):
+        session["done"] = True
+        session["outcome"] = "walk"
+
+        session["history"].append({
+            "round": rnd,
+            "actor": "buyer",
+            "action": "walk",
+            "price": None,
+        })
+
+        return {
+            "round": rnd,
+            "message": "Buyer walks away! No deal.",
+            "buyer_action": "walk",
+            "buyer_price": None,
+            "done": True,
+            "outcome": "walk",
+            "history": session["history"],
+        }
+
+    else:  # offer
+        session["last_buyer_offer"] = action.price
+        session["history"].append({
+            "round": rnd,
+            "actor": "buyer",
+            "action": "offer",
+            "price": action.price,
+        })
+
+        return {
+            "round": rnd,
+            "message": f"Buyer counters with {action.price:.0f} rupees.",
+            "buyer_action": "offer",
+            "buyer_price": action.price,
+            "done": False,
+            "history": session["history"],
+        }
 
 
 # ── WebSocket ────────────────────────────────────────────────────
