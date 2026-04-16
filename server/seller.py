@@ -410,6 +410,14 @@ class SellerState:
                 self._bluff_count = 0
 
         self.current_offer = round(new_offer, 2)
+
+        # If our computed counteroffer is at or below the buyer's offer, just accept --
+        # no rational seller counters below what the buyer already offered.
+        if buyer_offer is not None and self.current_offer <= buyer_offer:
+            msg = _pick_message(self.personality, "accept", self._rng,
+                                item=item, price=buyer_offer)
+            return ("accept", buyer_offer, tell, msg)
+
         self.offer_history.append(self.current_offer)
 
         # Maybe add pressure message
