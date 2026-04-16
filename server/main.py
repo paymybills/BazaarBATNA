@@ -341,10 +341,14 @@ async def health():
 
 class SimulateRequest(BaseModel):
     task: str = "single_deal"
-    strategy: str = "smart"  # "smart", "naive", "aggressive"
+    strategy: str = "smart"  # "smart", "naive", "aggressive", "llm"
     seed: Optional[int] = None
     seller_personality: Optional[str] = None
     speed_ms: int = 0  # 0 = return all at once
+    # LLM config (only used when strategy="llm")
+    llm_provider: Optional[str] = None  # "openai", "anthropic", "gemini", "huggingface", "grok"
+    llm_api_key: Optional[str] = None
+    llm_model: Optional[str] = None
 
 
 class SellerModeStepRequest(BaseModel):
@@ -409,14 +413,36 @@ def _ai_buyer_action(obs: BazaarObservation, strategy: str, rng) -> BazaarAction
         return BazaarAction(action="offer", price=round(next_offer, 2))
 
 
+@app.get("/providers")
+async def list_providers():
+    """List available LLM providers and their models."""
+    from .llm import PROVIDERS
+    return {
+        name: {
+            "name": p["name"],
+            "default_model": p["default_model"],
+            "models": p["models"],
+        }
+        for name, p in PROVIDERS.items()
+    }
+
+
 @app.post("/simulate")
 async def simulate(req: SimulateRequest):
     """Run a full AI-vs-seller negotiation and return the complete history.
 
     Used for spectator mode — watch an AI agent negotiate in real-time.
+    strategy="llm" uses an actual LLM via the specified provider.
     """
     if req.task not in TASKS:
         raise HTTPException(status_code=400, detail=f"Unknown task: {req.task}")
+
+    if req.strategy == "llm":
+        if not req.llm_provider or not req.llm_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="LLM strategy requires llm_provider and llm_api_key",
+            )
 
     task = copy.deepcopy(TASKS[req.task])
     if req.seller_personality:
@@ -429,6 +455,8 @@ async def simulate(req: SimulateRequest):
     rng = random.Random(req.seed)
 
     steps = []
+    llm_history: list[str] = []  # conversation log for LLM context
+
     for ep in range(task.total_episodes):
         obs = env.reset()
         steps.append({
@@ -438,6 +466,7 @@ async def simulate(req: SimulateRequest):
             "action": "open",
             "price": obs.seller_asking_price,
             "message": obs.message,
+            "reasoning": None,
             "reward": 0,
             "done": False,
             "tells": obs.tells.model_dump() if obs.tells else None,
@@ -448,7 +477,32 @@ async def simulate(req: SimulateRequest):
             if env.done:
                 break
 
-            action = _ai_buyer_action(obs, req.strategy, rng)
+            reasoning = None
+
+            if req.strategy == "llm":
+                # Use actual LLM
+                from .llm import call_llm
+                obs_dict = obs.model_dump()
+                llm_result = call_llm(
+                    provider=req.llm_provider,
+                    api_key=req.llm_api_key,
+                    model=req.llm_model,
+                    obs=obs_dict,
+                    history=llm_history,
+                )
+                action_str = llm_result.get("action", "offer")
+                price = llm_result.get("price")
+                reasoning = llm_result.get("reasoning", "")
+                action = BazaarAction(action=action_str, price=price)
+
+                # Build history entry for next LLM call
+                llm_history.append(
+                    f"Round {r}: You {'offered ' + str(price) if action_str == 'offer' else action_str}"
+                    f" -> Seller: {obs.message}"
+                )
+            else:
+                action = _ai_buyer_action(obs, req.strategy, rng)
+
             obs, reward_obj = env.step(action)
 
             steps.append({
@@ -460,6 +514,7 @@ async def simulate(req: SimulateRequest):
                 "buyer_offer": action.price,
                 "seller_offer": obs.opponent_last_offer,
                 "message": obs.message,
+                "reasoning": reasoning,
                 "reward": reward_obj.reward,
                 "reward_components": reward_obj.components,
                 "done": obs.done,
