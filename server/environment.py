@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import math
 import random
 from typing import Optional
@@ -15,9 +16,30 @@ from .models import (
     DealOutcome,
     DealRecord,
     EnvironmentState,
+    SellerPersonalityType,
     TaskConfig,
+    TellObservation,
 )
-from .seller import SellerState
+from .seller import SellerPersonality, SellerState, SellerTell
+
+
+def _tell_to_model(tell: SellerTell | None) -> TellObservation | None:
+    if tell is None:
+        return None
+    return TellObservation(
+        verbal_urgency=round(tell.verbal_urgency, 3),
+        verbal_confidence=round(tell.verbal_confidence, 3),
+        verbal_deception_cue=round(tell.verbal_deception_cue, 3),
+        price_rounding=tell.price_rounding,
+        offer_speed=tell.offer_speed,
+        concession_pattern=tell.concession_pattern,
+        fidget_level=round(tell.fidget_level, 3),
+        eye_contact=tell.eye_contact,
+        posture=tell.posture,
+        repeat_phrases=tell.repeat_phrases,
+        topic_changes=tell.topic_changes,
+        emotional_escalation=round(tell.emotional_escalation, 3),
+    )
 
 
 class BazaarEnvironment:
@@ -43,6 +65,7 @@ class BazaarEnvironment:
         self.offer_history: list[dict] = []
         self.cumulative_reward = 0.0
         self.step_rewards: list[float] = []
+        self.tells_history: list[TellObservation] = []
 
         # Stalling detection
         self._repeated_offers = 0
@@ -50,6 +73,9 @@ class BazaarEnvironment:
 
         # Episode results for career grading
         self.episode_results: list[DealRecord] = []
+
+        # Snapshot for counterfactual replay
+        self._snapshots: dict[int, dict] = {}
 
         # Items for variety
         self._items = [
@@ -59,6 +85,34 @@ class BazaarEnvironment:
             "wooden chess set",
         ]
 
+    def _snapshot(self):
+        """Save a snapshot of environment state for counterfactual replay."""
+        self._snapshots[self.current_round] = {
+            "seller": copy.deepcopy(self.seller),
+            "offer_history": copy.deepcopy(self.offer_history),
+            "done": self.done,
+            "cumulative_reward": self.cumulative_reward,
+            "step_rewards": list(self.step_rewards),
+            "repeated_offers": self._repeated_offers,
+            "last_buyer_offer": self._last_buyer_offer,
+            "current_round": self.current_round,
+        }
+
+    def restore_snapshot(self, round_num: int) -> bool:
+        """Restore environment to state at given round. Returns False if no snapshot."""
+        snap = self._snapshots.get(round_num)
+        if snap is None:
+            return False
+        self.seller = copy.deepcopy(snap["seller"])
+        self.offer_history = copy.deepcopy(snap["offer_history"])
+        self.done = snap["done"]
+        self.cumulative_reward = snap["cumulative_reward"]
+        self.step_rewards = list(snap["step_rewards"])
+        self._repeated_offers = snap["repeated_offers"]
+        self._last_buyer_offer = snap["last_buyer_offer"]
+        self.current_round = snap["current_round"]
+        return True
+
     def reset(self) -> BazaarObservation:
         """Reset for next episode."""
         self.current_episode += 1
@@ -66,8 +120,13 @@ class BazaarEnvironment:
         self.done = False
         self.offer_history = []
         self.step_rewards = []
+        self.tells_history = []
         self._repeated_offers = 0
         self._last_buyer_offer = None
+        self._snapshots = {}
+
+        # Map personality enum
+        personality = SellerPersonality(self.task.seller_personality.value)
 
         # Create seller for this episode
         seller_anchor = self.task.seller_cost * self.task.seller_anchor_multiplier
@@ -79,6 +138,8 @@ class BazaarEnvironment:
             initial_inventory=self.task.seller_inventory,
             batna_probability=self.task.seller_batna_probability,
             max_rounds=self.task.max_steps if self.task.total_episodes == 1 else self.task.max_steps // self.task.total_episodes,
+            personality=personality,
+            _rng=self.rng,
         )
 
         # Career mode: update seller with buyer history
@@ -86,6 +147,12 @@ class BazaarEnvironment:
             self.seller.update_career_info(self.career_history.capitulation_rate)
 
         item = self._items[(self.current_episode - 1) % len(self._items)]
+
+        from .seller import _pick_message
+        open_msg = _pick_message(
+            personality, "open", self.rng,
+            item=item, price=self.seller.anchor, cost=self.task.seller_cost,
+        )
 
         obs = BazaarObservation(
             current_round=0,
@@ -98,11 +165,12 @@ class BazaarEnvironment:
             seller_last_move_delta=None,
             item_name=item,
             seller_asking_price=self.seller.anchor,
+            seller_personality=self.task.seller_personality,
             episode_number=self.current_episode,
             total_episodes=self.total_episodes,
             career_history=self.career_history if self.task.enable_career else None,
             done=False,
-            message=f"Seller opens: \"This {item}? Best quality. {self.seller.anchor:.0f} rupees, final price.\"",
+            message=f'Seller opens: "{open_msg}"',
         )
 
         self.offer_history.append({
@@ -112,6 +180,7 @@ class BazaarEnvironment:
             "price": self.seller.anchor,
         })
 
+        self._snapshot()
         return obs
 
     def step(self, action: BazaarAction) -> tuple[BazaarObservation, BazaarReward]:
@@ -121,6 +190,7 @@ class BazaarEnvironment:
             obs.done = True
             return obs, BazaarReward(reward=0.0, terminal=True)
 
+        self._snapshot()
         self.current_round += 1
         reward_components: dict[str, float] = {}
         penalty = 0.0
@@ -128,14 +198,12 @@ class BazaarEnvironment:
         # Validate action
         if action.action == ActionType.OFFER:
             if action.price is None:
-                action.price = self.buyer_budget * 0.5  # default
-            # Clip out-of-range
+                action.price = self.buyer_budget * 0.5
             if action.price < 0 or action.price > self.buyer_budget:
                 penalty -= 0.2
                 reward_components["out_of_range_penalty"] = -0.2
                 action.price = max(0, min(action.price, self.buyer_budget))
 
-            # Stalling detection
             if self._last_buyer_offer is not None and abs(action.price - self._last_buyer_offer) < 0.5:
                 self._repeated_offers += 1
                 if self._repeated_offers >= 3:
@@ -158,11 +226,10 @@ class BazaarEnvironment:
             return self._handle_walk(reward_components, penalty)
         elif action.action == ActionType.ACCEPT:
             return self._handle_accept(reward_components, penalty)
-        else:  # OFFER
+        else:
             return self._handle_offer(action.price, reward_components, penalty)
 
     def _handle_walk(self, components: dict, penalty: float) -> tuple[BazaarObservation, BazaarReward]:
-        """Buyer walks away."""
         self.done = True
         walk_penalty = -0.3
         components["walk_penalty"] = walk_penalty
@@ -180,9 +247,7 @@ class BazaarEnvironment:
         return obs, reward
 
     def _handle_accept(self, components: dict, penalty: float) -> tuple[BazaarObservation, BazaarReward]:
-        """Buyer accepts seller's last offer."""
         if self.seller is None or not self.seller.offer_history:
-            # No offer to accept
             obs = self._make_obs(message="No seller offer to accept yet. Make an offer first.")
             reward = BazaarReward(reward=-0.1 + penalty, terminal=False, components={"invalid_accept": -0.1})
             self.step_rewards.append(reward.reward)
@@ -193,11 +258,14 @@ class BazaarEnvironment:
         return self._finalize_deal(agreed_price, components, penalty, buyer_accepted=True)
 
     def _handle_offer(self, price: float, components: dict, penalty: float) -> tuple[BazaarObservation, BazaarReward]:
-        """Buyer makes offer, seller responds."""
         assert self.seller is not None
 
-        # Get seller response
-        seller_action, seller_price = self.seller.respond(price, self.current_round)
+        seller_action, seller_price, tell, msg = self.seller.respond(price, self.current_round)
+
+        # Record tell
+        tell_model = _tell_to_model(tell)
+        if tell_model and self.task.enable_tells:
+            self.tells_history.append(tell_model)
 
         if seller_action == "accept":
             self.offer_history.append({
@@ -206,16 +274,17 @@ class BazaarEnvironment:
                 "action": "accept",
                 "price": price,
             })
-            return self._finalize_deal(price, components, penalty, buyer_accepted=False)
+            return self._finalize_deal(price, components, penalty, buyer_accepted=False, message=msg)
 
         elif seller_action == "walk":
             self.done = True
             components["seller_walked"] = -0.2
             self._record_deal(DealOutcome.WALK, None, self.current_round)
 
-            obs = self._make_obs(message="Seller walks away: \"I have another buyer interested. Good day.\"")
+            obs = self._make_obs(message=f'Seller: "{msg}"')
             obs.done = True
             obs.deal_outcome = DealOutcome.WALK
+            obs.tells = tell_model if self.task.enable_tells else None
 
             total = -0.2 + penalty
             reward = BazaarReward(reward=total, terminal=True, components=components)
@@ -253,6 +322,7 @@ class BazaarEnvironment:
                 obs = self._make_obs(message="Time's up. No deal reached.")
                 obs.done = True
                 obs.deal_outcome = DealOutcome.EXPIRED
+                obs.tells = tell_model if self.task.enable_tells else None
                 components["expired_penalty"] = -0.15
                 total = sum(components.values()) + penalty
                 reward = BazaarReward(reward=total, terminal=True, components=components)
@@ -267,13 +337,12 @@ class BazaarEnvironment:
                 seller_delta = round(seller_offers[-2] - seller_offers[-1], 2)
 
             total = sum(components.values()) + penalty
-            obs = self._make_obs(
-                message=f"Seller counters: \"{seller_price:.0f} rupees. That's my best offer.\"",
-            )
+            obs = self._make_obs(message=f'Seller: "{msg}"')
             obs.opponent_last_offer = seller_price
             obs.own_last_offer = price
             obs.seller_last_move_delta = seller_delta
             obs.rounds_remaining = rounds_per_ep - self.current_round
+            obs.tells = tell_model if self.task.enable_tells else None
 
             reward = BazaarReward(reward=total, terminal=False, components=components)
             self.step_rewards.append(total)
@@ -281,9 +350,9 @@ class BazaarEnvironment:
             return obs, reward
 
     def _finalize_deal(
-        self, agreed_price: float, components: dict, penalty: float, buyer_accepted: bool
+        self, agreed_price: float, components: dict, penalty: float,
+        buyer_accepted: bool, message: str | None = None,
     ) -> tuple[BazaarObservation, BazaarReward]:
-        """Close a successful deal."""
         self.done = True
         assert self.seller is not None
 
@@ -294,19 +363,16 @@ class BazaarEnvironment:
         normalized_surplus = surplus / max_surplus if max_surplus > 0 else 0
         normalized_surplus = max(0, min(1, normalized_surplus))
 
-        # Time discount: delta(t) = exp(-alpha * exp(beta * t/T))
         alpha, beta = 0.3, 2.5
         t_frac = self.current_round / max(self.seller.max_rounds, 1)
         time_discount = math.exp(-alpha * math.exp(beta * t_frac))
 
-        # Reputation leak penalty (career mode)
         rep_leak = 0.0
         if self.task.enable_career and len(self.career_history.deals) >= 3:
             cap_rate = self.career_history.capitulation_rate
             rep_leak = -0.1 * cap_rate
             components["reputation_leak"] = rep_leak
 
-        # Was this a capitulation? (accepted near seller anchor)
         capitulated = agreed_price > self.seller.anchor * 0.85
 
         terminal_reward = normalized_surplus * time_discount
@@ -320,9 +386,12 @@ class BazaarEnvironment:
         self._record_deal(DealOutcome.DEAL, agreed_price, self.current_round, capitulated)
         self.remaining_bankroll -= agreed_price
 
-        msg = f"Deal! Agreed at {agreed_price:.0f} rupees."
-        if buyer_accepted:
-            msg = f"You accept the seller's offer of {agreed_price:.0f} rupees."
+        if message is None:
+            msg = f"Deal! Agreed at {agreed_price:.0f} rupees."
+            if buyer_accepted:
+                msg = f"You accept the seller's offer of {agreed_price:.0f} rupees."
+        else:
+            msg = message
 
         obs = self._make_obs(message=msg)
         obs.done = True
@@ -334,7 +403,6 @@ class BazaarEnvironment:
         return obs, reward
 
     def _record_deal(self, outcome: DealOutcome, agreed_price: Optional[float], rounds: int, capitulated: bool = False):
-        """Record deal in career history."""
         surplus = 0.0
         norm_surplus = 0.0
         if agreed_price is not None:
@@ -354,7 +422,6 @@ class BazaarEnvironment:
         self.career_history.deals.append(record)
         self.episode_results.append(record)
 
-        # Update career stats
         deals = self.career_history.deals
         k = min(len(deals), 10)
         recent = deals[-k:]
@@ -367,7 +434,6 @@ class BazaarEnvironment:
             self.career_history.avg_rounds_to_close = sum(d.rounds_taken for d in completed) / len(completed)
 
     def _make_obs(self, message: str = "") -> BazaarObservation:
-        """Build current observation."""
         rounds_per_ep = self.seller.max_rounds if self.seller else self.task.max_steps
         return BazaarObservation(
             current_round=self.current_round,
@@ -380,6 +446,7 @@ class BazaarEnvironment:
             seller_last_move_delta=None,
             item_name=self._items[(self.current_episode - 1) % len(self._items)] if self.current_episode > 0 else "item",
             seller_asking_price=self.seller.anchor if self.seller else 0,
+            seller_personality=self.task.seller_personality,
             episode_number=self.current_episode,
             total_episodes=self.total_episodes,
             career_history=self.career_history if self.task.enable_career else None,
@@ -388,7 +455,6 @@ class BazaarEnvironment:
         )
 
     def get_state(self) -> EnvironmentState:
-        """Full environment state for state() endpoint."""
         return EnvironmentState(
             task_name=self.task.name,
             episode=self.current_episode,
@@ -399,9 +465,11 @@ class BazaarEnvironment:
             buyer_budget=self.buyer_budget,
             seller_cost=self.task.seller_cost,
             seller_anchor=self.seller.anchor if self.seller else 0,
+            seller_personality=self.task.seller_personality,
             offer_history=self.offer_history,
             career_history=self.career_history if self.task.enable_career else None,
             cumulative_reward=self.cumulative_reward,
+            tells_history=self.tells_history,
         )
 
     @property

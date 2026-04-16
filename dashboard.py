@@ -4,9 +4,9 @@ BazaarBot Dashboard - Interactive negotiation visualization.
 Run: streamlit run dashboard.py
 """
 
+import copy
 import math
 import random
-import time
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,14 +14,14 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from server.environment import BazaarEnvironment
-from server.models import ActionType, BazaarAction, DealOutcome
+from server.models import ActionType, BazaarAction, DealOutcome, SellerPersonalityType
 from server.tasks import GRADERS, TASKS
 
 # ── Page config ───────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="BazaarBot - Negotiation Simulator",
-    page_icon="🏪",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -49,6 +49,7 @@ st.sidebar.markdown(f"**Description:** {task.description}")
 st.sidebar.markdown(f"**Max steps:** {task.max_steps}")
 st.sidebar.markdown(f"**Episodes:** {task.total_episodes}")
 st.sidebar.markdown(f"**Success threshold:** {task.success_threshold}")
+st.sidebar.markdown(f"**Personality:** {task.seller_personality.value}")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Buyer Strategy")
@@ -62,6 +63,12 @@ buyer_strategy = st.sidebar.selectbox(
         "aggressive": "Aggressive (Lowballs)",
         "manual": "Manual (You negotiate!)",
     }[x],
+)
+
+# Personality override
+personality_override = st.sidebar.selectbox(
+    "Seller personality override",
+    ["task_default", "default", "deceptive", "impatient", "collaborative"],
 )
 
 seed = st.sidebar.number_input("Random seed", value=42, min_value=0, max_value=9999)
@@ -78,7 +85,6 @@ custom_anchor_mult = st.sidebar.slider("Seller anchor multiplier", 1.5, 3.0, tas
 # ── Buyer strategies ─────────────────────────────────────────────
 
 def naive_buyer(obs, rng):
-    """Accepts quickly -- capitulates near anchor."""
     if obs.current_round == 0:
         return BazaarAction(action=ActionType.OFFER, price=obs.seller_asking_price * 0.8)
     if obs.current_round >= 2:
@@ -87,7 +93,6 @@ def naive_buyer(obs, rng):
 
 
 def aggressive_buyer(obs, rng):
-    """Lowballs hard, risks walking."""
     target = obs.own_private_budget * 0.35
     if obs.current_round == 0:
         return BazaarAction(action=ActionType.OFFER, price=target * 0.7)
@@ -100,51 +105,35 @@ def aggressive_buyer(obs, rng):
 
 
 def smart_buyer(obs, rng):
-    """Strategic buyer -- anchors low, reads seller velocity, adapts."""
     budget = obs.own_private_budget
     ask = obs.seller_asking_price
-    midpoint = (budget * 0.4 + ask) / 2
-
     if obs.current_round == 0:
-        # Anchor at ~40% of asking
         return BazaarAction(action=ActionType.OFFER, price=round(ask * 0.4, 2))
 
-    # Read seller concession speed
     seller_velocity = obs.seller_last_move_delta or 0
     opp_offer = obs.opponent_last_offer or ask
 
-    # If seller is dropping fast, hold firm
     if seller_velocity > ask * 0.05:
         own_move = budget * 0.02
     else:
         own_move = budget * 0.05
 
-    # Compute our next offer
     last = obs.own_last_offer or (ask * 0.4)
     next_offer = last + own_move
 
-    # Deadline pressure
     if obs.own_private_deadline and obs.current_round >= obs.own_private_deadline - 1:
-        # Getting close to deadline -- be more aggressive
         next_offer = min(opp_offer * 0.95, budget * 0.7)
         if obs.current_round >= obs.own_private_deadline:
             return BazaarAction(action=ActionType.ACCEPT)
 
-    # Accept if good enough deal
     if opp_offer <= budget * 0.55:
         return BazaarAction(action=ActionType.ACCEPT)
-
-    # Walk if stuck and close to end
     if obs.rounds_remaining <= 1 and opp_offer > budget * 0.75:
         return BazaarAction(action=ActionType.WALK)
-
-    # Last round -- accept if reasonable
     if obs.rounds_remaining <= 1 and opp_offer <= budget * 0.75:
         return BazaarAction(action=ActionType.ACCEPT)
-
-    # Career mode: vary strategy slightly
     if obs.career_history and obs.career_history.capitulation_rate > 0.3:
-        next_offer *= 0.95  # be tighter if we've been caving
+        next_offer *= 0.95
 
     next_offer = max(next_offer, ask * 0.3)
     next_offer = min(next_offer, budget * 0.7)
@@ -162,13 +151,13 @@ BUYERS = {
 # ── Simulation runner ─────────────────────────────────────────────
 
 def run_simulation(task_config, strategy, seed_val, budget, cost, anchor_mult):
-    """Run complete simulation, yielding state after each step."""
-    # Override task config
-    import copy
     tc = copy.deepcopy(task_config)
     tc.buyer_budget = budget
     tc.seller_cost = cost
     tc.seller_anchor_multiplier = anchor_mult
+
+    if personality_override != "task_default":
+        tc.seller_personality = SellerPersonalityType(personality_override)
 
     env = BazaarEnvironment(tc, seed=seed_val)
     rng = random.Random(seed_val)
@@ -212,6 +201,7 @@ def run_simulation(task_config, strategy, seed_val, budget, cost, anchor_mult):
                 "gap": abs((obs.opponent_last_offer or 0) - (action.price or 0)) if action.price else None,
                 "done": obs.done,
                 "outcome": obs.deal_outcome.value if obs.deal_outcome else None,
+                "tells": obs.tells.model_dump() if obs.tells else None,
             }
             ep_steps.append(step_data)
 
@@ -228,7 +218,6 @@ def run_simulation(task_config, strategy, seed_val, budget, cost, anchor_mult):
         })
         all_steps.extend(ep_steps)
 
-    # Grade
     grader = GRADERS[tc.name]
     final_score = grader(env.episode_results, tc)
 
@@ -238,7 +227,7 @@ def run_simulation(task_config, strategy, seed_val, budget, cost, anchor_mult):
 # ── Main content ──────────────────────────────────────────────────
 
 st.title("BazaarBot - Negotiation Simulator")
-st.markdown("*Customer-vendor price negotiation with asymmetric information and career dynamics*")
+st.markdown("*Customer-vendor price negotiation with asymmetric information, personality types, and poker tells*")
 
 # Manual mode
 if buyer_strategy == "manual":
@@ -256,11 +245,12 @@ if buyer_strategy == "manual":
 
     with col1:
         if st.button("Start New Negotiation", type="primary"):
-            import copy
             tc = copy.deepcopy(task)
             tc.buyer_budget = custom_budget
             tc.seller_cost = custom_cost
             tc.seller_anchor_multiplier = custom_anchor_mult
+            if personality_override != "task_default":
+                tc.seller_personality = SellerPersonalityType(personality_override)
             env = BazaarEnvironment(tc, seed=seed)
             obs = env.reset()
             st.session_state.manual_env = env
@@ -274,8 +264,22 @@ if buyer_strategy == "manual":
 
         st.markdown(f"**Round {obs.current_round}/{obs.max_rounds}** | "
                      f"Budget: {obs.own_private_budget:.0f} | "
-                     f"Seller asks: {obs.opponent_last_offer:.0f}")
+                     f"Seller asks: {obs.opponent_last_offer:.0f} | "
+                     f"Personality: {obs.seller_personality}")
         st.info(obs.message)
+
+        # Show tells
+        if obs.tells:
+            with st.expander("Seller Tells (poker read)", expanded=True):
+                tcol1, tcol2 = st.columns(2)
+                with tcol1:
+                    st.progress(obs.tells.verbal_urgency, text=f"Urgency: {obs.tells.verbal_urgency:.0%}")
+                    st.progress(obs.tells.verbal_confidence, text=f"Confidence: {obs.tells.verbal_confidence:.0%}")
+                    st.progress(obs.tells.verbal_deception_cue, text=f"Deception cue: {obs.tells.verbal_deception_cue:.0%}")
+                with tcol2:
+                    st.progress(obs.tells.fidget_level, text=f"Fidgeting: {obs.tells.fidget_level:.0%}")
+                    st.write(f"Eyes: {obs.tells.eye_contact} | Posture: {obs.tells.posture}")
+                    st.write(f"Speed: {obs.tells.offer_speed} | Pattern: {obs.tells.concession_pattern}")
 
         col_a, col_b, col_c = st.columns(3)
         with col_a:
@@ -336,7 +340,6 @@ if buyer_strategy == "manual":
         sc = grader(env.episode_results, env.task)
         st.success(f"Negotiation complete! Score: {sc:.4f}")
 
-    # Show history
     if st.session_state.manual_history:
         st.markdown("### Negotiation Log")
         for h in st.session_state.manual_history:
@@ -354,7 +357,6 @@ if not st.session_state.get("sim_running"):
     st.info("Select a task and strategy, then click **Run Simulation** to begin.")
     st.stop()
 
-# Run simulation
 with st.spinner("Running simulation..."):
     all_steps, episode_data, env, final_score = run_simulation(
         task, buyer_strategy, seed, custom_budget, custom_cost, custom_anchor_mult
@@ -367,7 +369,6 @@ col1, col2, col3, col4, col5 = st.columns(5)
 
 deals_made = sum(1 for e in episode_data if e["outcome"] == "deal")
 walks = sum(1 for e in episode_data if e["outcome"] == "walk")
-expired = sum(1 for e in episode_data if e["outcome"] == "expired")
 avg_surplus = sum(e["surplus"] for e in episode_data) / max(len(episode_data), 1)
 
 col1.metric("Final Score", f"{final_score:.4f}")
@@ -382,7 +383,6 @@ st.markdown("---")
 st.subheader("Offer Trajectories")
 
 if task.total_episodes == 1:
-    # Single episode view
     df = pd.DataFrame(all_steps)
 
     fig = go.Figure()
@@ -402,18 +402,15 @@ if task.total_episodes == 1:
         marker=dict(size=10, symbol="circle"),
     ))
 
-    # Reference lines
     fig.add_hline(y=custom_budget, line_dash="dash", line_color="gray",
                   annotation_text="Budget", annotation_position="top right")
     fig.add_hline(y=custom_cost, line_dash="dash", line_color="orange",
                   annotation_text="Seller Cost", annotation_position="bottom right")
 
-    # Midpoint
     midpoint = (custom_budget + custom_cost) / 2
     fig.add_hline(y=midpoint, line_dash="dot", line_color="yellow",
                   annotation_text="Nash Midpoint", annotation_position="top left")
 
-    # Deal point
     if episode_data[0]["outcome"] == "deal" and episode_data[0]["agreed_price"]:
         fig.add_hline(y=episode_data[0]["agreed_price"], line_dash="solid",
                       line_color="lime", annotation_text=f"Deal @ {episode_data[0]['agreed_price']:.0f}")
@@ -428,7 +425,6 @@ if task.total_episodes == 1:
     st.plotly_chart(fig, use_container_width=True)
 
 else:
-    # Multi-episode view
     tabs = st.tabs([f"Episode {e['episode']}" for e in episode_data] + ["All Episodes"])
 
     for i, ep in enumerate(episode_data):
@@ -453,9 +449,7 @@ else:
                               title=f"Episode {ep['episode']}: {ep['outcome']}")
             st.plotly_chart(fig, use_container_width=True)
 
-    # Summary tab
     with tabs[-1]:
-        ep_df = pd.DataFrame(episode_data)
         fig = make_subplots(rows=1, cols=2, subplot_titles=["Agreed Prices", "Surplus per Episode"])
 
         prices = [e["agreed_price"] or 0 for e in episode_data]
@@ -478,7 +472,6 @@ st.subheader("Reward Analysis")
 col_r1, col_r2 = st.columns(2)
 
 with col_r1:
-    # Cumulative reward over steps
     cum_rewards = []
     running = 0
     for s in all_steps:
@@ -500,7 +493,6 @@ with col_r1:
     st.plotly_chart(fig_cum, use_container_width=True)
 
 with col_r2:
-    # Per-step rewards
     step_rewards = [s.get("reward", 0) for s in all_steps]
     fig_per = go.Figure()
     fig_per.add_trace(go.Bar(
@@ -523,7 +515,6 @@ st.subheader("State Space Analysis")
 col_s1, col_s2 = st.columns(2)
 
 with col_s1:
-    # Offer gap convergence
     gaps = [s.get("gap") for s in all_steps if s.get("gap") is not None]
     if gaps:
         fig_gap = go.Figure()
@@ -541,7 +532,6 @@ with col_s1:
         st.plotly_chart(fig_gap, use_container_width=True)
 
 with col_s2:
-    # Time discount curve
     alpha, beta = 0.3, 2.5
     max_r = task.max_steps if task.total_episodes == 1 else task.max_steps // task.total_episodes
     t_vals = [i / max_r for i in range(max_r + 1)]
@@ -555,11 +545,46 @@ with col_s2:
         marker=dict(size=6),
     ))
     fig_disc.update_layout(
-        title="Time Discount Factor delta(t) = exp(-0.3 * exp(2.5 * t/T))",
+        title="Time Discount Factor",
         xaxis_title="Round", yaxis_title="Discount",
         template="plotly_dark", height=350,
     )
     st.plotly_chart(fig_disc, use_container_width=True)
+
+
+# ── Tells visualization ──────────────────────────────────────────
+
+tells_data = [s for s in all_steps if s.get("tells")]
+if tells_data:
+    st.markdown("---")
+    st.subheader("Seller Tells Analysis")
+
+    tell_df = pd.DataFrame([
+        {
+            "round": s["round"],
+            "urgency": s["tells"]["verbal_urgency"],
+            "confidence": s["tells"]["verbal_confidence"],
+            "deception": s["tells"]["verbal_deception_cue"],
+            "fidget": s["tells"]["fidget_level"],
+            "emotion": s["tells"]["emotional_escalation"],
+        }
+        for s in tells_data
+    ])
+
+    fig_tells = go.Figure()
+    for col_name, color in [("urgency", "#ff6b6b"), ("confidence", "#4ecdc4"),
+                             ("deception", "#ffd93d"), ("fidget", "#8b5cf6")]:
+        fig_tells.add_trace(go.Scatter(
+            x=tell_df["round"], y=tell_df[col_name],
+            mode="lines+markers", name=col_name.capitalize(),
+            line=dict(color=color, width=2),
+        ))
+    fig_tells.update_layout(
+        template="plotly_dark", height=350,
+        xaxis_title="Round", yaxis_title="Signal Strength (0-1)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig_tells, use_container_width=True)
 
 
 # ── Career history table ──────────────────────────────────────────
@@ -580,11 +605,9 @@ if task.enable_career and episode_data:
     ])
     st.dataframe(career_df, use_container_width=True, hide_index=True)
 
-    # Capitulation rate over time
     cap_rates = []
     cap_count = 0
     for i, e in enumerate(episode_data):
-        # Simple check: agreed at >85% of anchor
         anchor = custom_cost * custom_anchor_mult
         if e["agreed_price"] and e["agreed_price"] > anchor * 0.85:
             cap_count += 1
