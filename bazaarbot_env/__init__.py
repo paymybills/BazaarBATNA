@@ -40,6 +40,7 @@ from .gym_wrapper import (
     format_observation,
     parse_action,
     rollout_episode,
+    strip_think_tags,
 )
 
 __all__ = [
@@ -65,4 +66,5 @@ __all__ = [
     "format_observation",
     "parse_action",
     "rollout_episode",
+    "strip_think_tags",
 ]

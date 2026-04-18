@@ -123,14 +123,35 @@ def format_observation(
     """)
 
 
+def strip_think_tags(chat_text: str) -> str:
+    """Remove Qwen3.5's auto-injected empty <think></think> blocks.
+
+    Qwen3.5's chat template always wraps assistant turns with think tags
+    (they're the interface for the model's reasoning mode).  For our action
+    JSON schema we want the assistant turn to go straight to output, so
+    we normalize the template output by removing empty think blocks in
+    both the prompt (before generation) and SFT training text.
+    """
+    import re
+    # Common pattern: empty think with various whitespace
+    chat_text = re.sub(r"<think>\s*</think>\s*", "", chat_text)
+    # Defensive: trailing just-opened tag with no close
+    chat_text = re.sub(r"<think>\s*$", "", chat_text)
+    return chat_text
+
+
 def parse_action(text: str, fallback_price: float = 30.0) -> dict[str, Any]:
     """Best-effort JSON parser for LLM action output.
 
     Robust to the common failure modes: markdown fences, leading prose,
-    trailing commentary.  Falls back to a conservative offer if unparseable
-    so training never crashes on a bad generation.
+    trailing commentary, reasoning-mode <think>...</think> blocks.  Falls
+    back to a conservative offer if unparseable so training never crashes
+    on a bad generation.
     """
+    import re
     s = text.strip()
+    # Drop any <think>...</think> blocks before looking for JSON
+    s = re.sub(r"<think>.*?</think>", "", s, flags=re.DOTALL).strip()
     if "```" in s:
         parts = s.split("```")
         if len(parts) >= 2:
