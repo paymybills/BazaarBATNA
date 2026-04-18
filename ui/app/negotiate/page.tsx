@@ -80,57 +80,102 @@ export default function NegotiatePage() {
         if (price !== undefined) body.price = price;
         const res = await apiPost<StepResponse>("/step", body);
         const newObs = res.observation;
+        const info = (res.info || {}) as {
+          episode_done?: boolean;
+          episode?: number;
+          next_episode?: number;
+        };
+
+        // Detect invalid accept: server returns a non-advancing turn with this message.
+        const invalidAccept =
+          action === "accept" &&
+          typeof newObs.message === "string" &&
+          newObs.message.toLowerCase().includes("no seller offer to accept");
+
+        // Detect episode rollover (career mode): server resets and returns new opening obs.
+        const episodeRolled = Boolean(info.episode_done);
 
         // Update history
         const newHistory = [...history];
-        if (action === "offer" && price !== undefined) {
-          newHistory.push({
-            round: newObs.current_round,
-            actor: "buyer",
-            action: "offer",
-            price,
-          });
-        }
-        if (action === "accept") {
-          newHistory.push({
-            round: newObs.current_round,
-            actor: "buyer",
-            action: "accept",
-            price: obs.opponent_last_offer,
-          });
-        }
-        if (action === "walk") {
-          newHistory.push({
-            round: newObs.current_round,
-            actor: "buyer",
-            action: "walk",
-            price: null,
-          });
-        }
-        if (newObs.opponent_last_offer !== obs.opponent_last_offer) {
-          newHistory.push({
-            round: newObs.current_round,
-            actor: "seller",
-            action: newObs.deal_outcome === "deal" ? "accept" : "counter",
-            price: newObs.opponent_last_offer,
-          });
+        if (!invalidAccept) {
+          if (action === "offer" && price !== undefined) {
+            newHistory.push({
+              round: newObs.current_round,
+              actor: "buyer",
+              action: "offer",
+              price,
+            });
+          }
+          if (action === "accept") {
+            newHistory.push({
+              round: newObs.current_round,
+              actor: "buyer",
+              action: "accept",
+              price: obs.opponent_last_offer,
+            });
+          }
+          if (action === "walk") {
+            newHistory.push({
+              round: newObs.current_round,
+              actor: "buyer",
+              action: "walk",
+              price: null,
+            });
+          }
+          if (
+            !episodeRolled &&
+            newObs.opponent_last_offer !== obs.opponent_last_offer
+          ) {
+            newHistory.push({
+              round: newObs.current_round,
+              actor: "seller",
+              action: newObs.deal_outcome === "deal" ? "accept" : "counter",
+              price: newObs.opponent_last_offer,
+            });
+          }
         }
 
         setHistory(newHistory);
         setObs(newObs);
         setTotalReward((r) => r + res.reward);
 
-        const actionLabel =
-          action === "offer"
-            ? `You offer ${price?.toFixed(0)} rupees`
-            : action === "accept"
-            ? "You accept"
-            : "You walk away";
-        setMessages((m) => [
-          ...m,
-          { round: newObs.current_round, text: actionLabel, type: "buyer" },
-          { round: newObs.current_round, text: newObs.message, type: "seller" },
-        ]);
+        setMessages((m) => {
+          const next = [...m];
+          if (invalidAccept) {
+            next.push({
+              round: newObs.current_round,
+              text: `Invalid: ${newObs.message}`,
+              type: "error",
+            });
+            return next;
+          }
+          const actionLabel =
+            action === "offer"
+              ? `You offer ${price?.toFixed(0)} rupees`
+              : action === "accept"
+              ? "You accept"
+              : "You walk away";
+          next.push({
+            round: newObs.current_round,
+            text: actionLabel,
+            type: "buyer",
+          });
+          if (episodeRolled) {
+            next.push({
+              round: newObs.current_round,
+              text: `— Episode ${info.episode ?? "?"} ended · Episode ${
+                info.next_episode ?? newObs.episode_number
+              } begins (${newObs.item_name}) —`,
+              type: "divider",
+            });
+          }
+          next.push({
+            round: newObs.current_round,
+            text: newObs.message,
+            type: "seller",
+          });
+          return next;
+        });
 
         if (res.done) {
           setDone(true);
@@ -304,21 +349,35 @@ export default function NegotiatePage() {
                 ref={logRef}
                 className="p-3 max-h-80 overflow-y-auto space-y-2"
               >
-                {messages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`text-sm animate-fade-in ${
-                      msg.type === "buyer"
-                        ? "text-accent"
-                        : msg.type === "error"
-                        ? "text-danger"
-                        : "text-foreground/70"
-                    }`}
-                  >
-                    <span className="text-xs text-foreground/30 mr-2">R{msg.round}</span>
-                    {msg.text}
-                  </div>
-                ))}
+                {messages.map((msg, i) => {
+                  if (msg.type === "divider") {
+                    return (
+                      <div
+                        key={i}
+                        className="text-xs text-foreground/40 italic text-center py-1 border-t border-border/50 mt-2"
+                      >
+                        {msg.text}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={i}
+                      className={`text-sm animate-fade-in ${
+                        msg.type === "buyer"
+                          ? "text-accent"
+                          : msg.type === "error"
+                          ? "text-danger"
+                          : "text-foreground/70"
+                      }`}
+                    >
+                      <span className="text-xs text-foreground/30 mr-2">
+                        R{msg.round}
+                      </span>
+                      {msg.text}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
