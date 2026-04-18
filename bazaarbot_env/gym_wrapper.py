@@ -124,25 +124,18 @@ def format_observation(
 
 
 def strip_think_tags(chat_text: str) -> str:
-    """Remove Qwen3.5's auto-injected <think>...</think> blocks.
+    """NO-OP: kept for API compatibility.
 
-    Qwen3.5's chat template wraps assistant turns with think tags (the
-    interface for the model's reasoning mode).  For our action JSON schema
-    we want the assistant turn to go straight to output, so we normalize
-    the template output by removing think blocks in both the prompt
-    (before generation) and SFT training text.  Handles:
+    We initially stripped Qwen3.5's auto-injected <think>...</think>
+    blocks from prompts and SFT targets, intending to teach the model
+    to skip reasoning and go straight to JSON.  In practice the first
+    SFT run happened before the strip was wired in, so the trained
+    LoRA actually expects to see <think>\\n\\n</think>\\n\\n preceding
+    its JSON output.
 
-    - Closed empty:        <think></think>
-    - Closed w/ content:   <think>anything</think>
-    - Dangling open:       <think>\n  (with no close, at end of prompt)
+    Rather than redo SFT, we leave the chat template untouched and let
+    parse_action() discard the leading think block at parse time.
     """
-    import re
-    # Any <think>...</think>, possibly across lines, including empty.
-    chat_text = re.sub(r"<think>.*?</think>\s*", "", chat_text, flags=re.DOTALL)
-    # Dangling/unclosed <think> anywhere to end of string.
-    chat_text = re.sub(r"<think>\s*$", "", chat_text, flags=re.DOTALL)
-    # And the mid-string variant: <think>\n right before nothing meaningful.
-    chat_text = re.sub(r"<think>\s*(?=<\|im_end\|>|<\|endoftext\|>)", "", chat_text)
     return chat_text
 
 
