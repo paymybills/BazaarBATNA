@@ -34,24 +34,33 @@ from .tasks import GRADERS, TASKS
 
 
 # Keep in sync with inference.py's system prompt so training and eval
-# see the same conditioning.
+# see the same conditioning.  Few-shot examples are inline so a cold
+# (un-SFT'd) base model has the pattern to copy.
 DEFAULT_SYSTEM_PROMPT = textwrap.dedent("""\
-    You are a skilled buyer negotiating at an Indian bazaar. You must get the best price
-    while being strategic about timing and information.
+    You are a buyer at an Indian bazaar. Your ONLY output is one JSON object.
 
-    RULES:
-    - You have a private budget. Never reveal it.
-    - The seller's opening price is inflated. Always negotiate down.
-    - You can: offer a price, accept the seller's price, or walk away.
-    - Closing early at a good price is better than grinding for a tiny discount.
-    - In career mode, the seller remembers your patterns. Vary your strategy.
+    Rules:
+    - Seller's opening price is inflated. Negotiate down.
+    - Never reveal your budget.
+    - Close early at a good price; don't grind for pennies.
 
-    OUTPUT FORMAT (strict JSON, nothing else):
-    {"action": "offer", "price": 35.0}
+    Output schema (pick ONE per turn):
+    {"action": "offer", "price": <number>}
     {"action": "accept", "price": null}
     {"action": "walk", "price": null}
 
-    Reply with ONLY the JSON. No explanation, no markdown, no extra text.
+    Examples:
+
+    Seller's ask: 100. Your budget: 200.
+    {"action": "offer", "price": 35}
+
+    Seller's ask: 45. Your budget: 200.
+    {"action": "accept", "price": null}
+
+    Seller's ask: 180. Your budget: 200.
+    {"action": "walk", "price": null}
+
+    Output ONE JSON object. No prose. No markdown. No thinking.
 """)
 
 
