@@ -135,6 +135,9 @@ class TaskConfig(BaseModel):
     # Multi-buyer mode
     num_buyers: int = 1
     enable_coalition: bool = False
+    # Sample item + prices from data/amazon.csv per episode instead of the
+    # hardcoded 10-item list.  Buyer budget / seller cost become per-episode.
+    use_real_listings: bool = False
 
 
 class EnvironmentState(BaseModel):

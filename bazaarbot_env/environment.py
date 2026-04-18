@@ -128,11 +128,27 @@ class BazaarEnvironment:
         # Map personality enum
         personality = SellerPersonality(self.task.seller_personality.value)
 
+        # Per-episode listing: sample from real dataset when enabled, else
+        # fall back to the task's static cost/budget + hardcoded items list.
+        listing = None
+        if self.task.use_real_listings:
+            from .listings import sample_listing
+            listing = sample_listing(self.rng)
+
+        if listing is not None:
+            episode_cost = listing["seller_cost"]
+            episode_anchor = listing["seller_anchor"]
+            self.buyer_budget = listing["buyer_budget"]
+            item = listing["name"]
+        else:
+            episode_cost = self.task.seller_cost
+            episode_anchor = self.task.seller_cost * self.task.seller_anchor_multiplier
+            item = self._items[(self.current_episode - 1) % len(self._items)]
+
         # Create seller for this episode
-        seller_anchor = self.task.seller_cost * self.task.seller_anchor_multiplier
         self.seller = SellerState(
-            cost=self.task.seller_cost,
-            anchor=seller_anchor,
+            cost=episode_cost,
+            anchor=episode_anchor,
             base_concession_rate=self.task.seller_concession_rate,
             inventory=self.task.seller_inventory,
             initial_inventory=self.task.seller_inventory,
@@ -145,8 +161,6 @@ class BazaarEnvironment:
         # Career mode: update seller with buyer history
         if self.task.enable_career and self.career_history.deals:
             self.seller.update_career_info(self.career_history.capitulation_rate)
-
-        item = self._items[(self.current_episode - 1) % len(self._items)]
 
         from .seller import _pick_message
         open_msg = _pick_message(
@@ -407,7 +421,10 @@ class BazaarEnvironment:
         norm_surplus = 0.0
         if agreed_price is not None:
             surplus = self.buyer_budget - agreed_price
-            max_surplus = self.buyer_budget - self.task.seller_cost
+            seller_cost_for_deal = (
+                self.seller.cost if self.seller is not None else self.task.seller_cost
+            )
+            max_surplus = self.buyer_budget - seller_cost_for_deal
             norm_surplus = surplus / max_surplus if max_surplus > 0 else 0
 
         record = DealRecord(

@@ -179,6 +179,31 @@ TASKS: dict[str, TaskConfig] = {
         num_buyers=3,
         enable_coalition=True,
     ),
+    "amazon_realistic": TaskConfig(
+        name="amazon_realistic",
+        difficulty="medium",
+        description=(
+            "Single-deal negotiation over a real Amazon listing. Item, MRP, and "
+            "street price sampled per episode from data/amazon.csv. "
+            "Forces generalization across product categories and price magnitudes."
+        ),
+        max_steps=8,
+        total_episodes=1,
+        # buyer_budget / seller_cost are ignored when use_real_listings=True;
+        # kept here as fallbacks if the CSV is missing on the runtime.
+        buyer_budget=1000.0,
+        seller_cost=400.0,
+        seller_anchor_multiplier=2.0,
+        seller_concession_rate=0.08,
+        buyer_deadline=None,
+        seller_inventory=1,
+        seller_batna_probability=0.05,
+        enable_career=False,
+        success_threshold=0.3,
+        seller_personality=SellerPersonalityType.DEFAULT,
+        enable_tells=True,
+        use_real_listings=True,
+    ),
 }
 
 
@@ -287,6 +312,17 @@ def grade_read_the_tells(results: list[DealRecord], task: TaskConfig) -> float:
     return max(0.0, min(1.0, sum(scores) / max(len(scores), 1)))
 
 
+def grade_amazon_realistic(results: list[DealRecord], task: TaskConfig) -> float:
+    """Grader for real-listing tasks: relies on per-episode normalized_surplus
+    (which uses the seller's episode cost, not the task's default cost)."""
+    if not results:
+        return 0.0
+    deal = results[0]
+    if deal.outcome != DealOutcome.DEAL:
+        return 0.0
+    return max(0.0, min(1.0, deal.normalized_surplus))
+
+
 GRADERS = {
     "single_deal": grade_single_deal,
     "asymmetric_pressure": grade_asymmetric_pressure,
@@ -296,4 +332,5 @@ GRADERS = {
     "collaborative_seller": grade_personality_task,
     "read_the_tells": grade_read_the_tells,
     "marketplace_arena": grade_personality_task,
+    "amazon_realistic": grade_amazon_realistic,
 }
