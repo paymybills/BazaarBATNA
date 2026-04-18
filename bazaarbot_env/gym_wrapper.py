@@ -124,19 +124,25 @@ def format_observation(
 
 
 def strip_think_tags(chat_text: str) -> str:
-    """Remove Qwen3.5's auto-injected empty <think></think> blocks.
+    """Remove Qwen3.5's auto-injected <think>...</think> blocks.
 
-    Qwen3.5's chat template always wraps assistant turns with think tags
-    (they're the interface for the model's reasoning mode).  For our action
-    JSON schema we want the assistant turn to go straight to output, so
-    we normalize the template output by removing empty think blocks in
-    both the prompt (before generation) and SFT training text.
+    Qwen3.5's chat template wraps assistant turns with think tags (the
+    interface for the model's reasoning mode).  For our action JSON schema
+    we want the assistant turn to go straight to output, so we normalize
+    the template output by removing think blocks in both the prompt
+    (before generation) and SFT training text.  Handles:
+
+    - Closed empty:        <think></think>
+    - Closed w/ content:   <think>anything</think>
+    - Dangling open:       <think>\n  (with no close, at end of prompt)
     """
     import re
-    # Common pattern: empty think with various whitespace
-    chat_text = re.sub(r"<think>\s*</think>\s*", "", chat_text)
-    # Defensive: trailing just-opened tag with no close
-    chat_text = re.sub(r"<think>\s*$", "", chat_text)
+    # Any <think>...</think>, possibly across lines, including empty.
+    chat_text = re.sub(r"<think>.*?</think>\s*", "", chat_text, flags=re.DOTALL)
+    # Dangling/unclosed <think> anywhere to end of string.
+    chat_text = re.sub(r"<think>\s*$", "", chat_text, flags=re.DOTALL)
+    # And the mid-string variant: <think>\n right before nothing meaningful.
+    chat_text = re.sub(r"<think>\s*(?=<\|im_end\|>|<\|endoftext\|>)", "", chat_text)
     return chat_text
 
 
