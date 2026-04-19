@@ -1,4 +1,4 @@
-# BazaarBot: Negotiation Under Asymmetric Information
+# BazaarBot: An Autonomous Negotiation Agent
 
 **OpenEnv Hackathon — Round 2 Submission**
 Team: PayMyBills
@@ -7,24 +7,45 @@ Team: PayMyBills
 
 ## Problem Statement
 
-Real-world agent systems must negotiate resource exchanges — pricing, service
-contracts, API credits, task-for-payment — under **asymmetric information**.
-Each party holds private state (budget, cost, deadline, alternatives) and must
-infer the counterparty's state from partial, noisy observations of their
-behavior. This is a canonical partially-observable Markov game (POMG) with
-hidden types, and it subsumes three of the hackathon's four core themes:
-multi-agent interaction, long-horizon planning under hidden deadlines, and
-world modeling from noisy signals.
+**The product is the agent.** BazaarBot is a deal-hunter that negotiates on a
+user's behalf — it sees a listing, estimates a fair price, opens with a
+calibrated lowball, and either closes the gap or walks away, all without the
+user having to haggle themselves. Think "autopilot for r/IndianMarketplace
+replies" or a procurement bot that doesn't take the first quote.
 
-**BazaarBot** is an OpenEnv-compliant negotiation environment where a buyer
-LLM must purchase items from an adversarial seller across single-deal,
-asymmetric-information, and career-mode configurations. The buyer's reward
-is the surplus captured against its private budget, time-discounted. Seller
-is rule-based but adversarial — personalities include deceptive bluffers,
-impatient walkers, and collaborative splitters — and leaks hidden state via
-observable "tells" (urgency cues, offer velocity, concession patterns).
-Items and prices are sampled per-episode from a real Amazon dataset (1,417
-products) so the agent generalizes across price magnitudes.
+The agent is only useful if it's genuinely good at negotiating, which is a
+hard problem for three reasons, each mapping to a hackathon theme:
+
+1. **Asymmetric information (world modeling).** The seller knows their cost,
+   BATNA, and urgency; the buyer doesn't. An expert human buyer *infers* these
+   from behavior — concession speed, phrasing, hesitation. An agent must do
+   the same, learning to read noisy observable "tells" as evidence of hidden
+   seller state. This is a partially-observable Markov game with hidden types.
+
+2. **Adversarial counterparties (multi-agent).** Sellers actively bluff,
+   manipulate, and stage fake walk-aways. A naive agent that takes verbal
+   claims at face value gets fleeced. The agent must treat negotiation as a
+   game, not an instruction-following task.
+
+3. **Reputation and deadlines (long-horizon).** Real marketplaces have memory
+   — if you always capitulate, the next seller opens higher. Real purchases
+   have deadlines — if you grind forever, the inventory gets bought by
+   someone else. The agent must plan across both dimensions.
+
+The training pipeline — environment-reward RL on a realistic price
+distribution, plus a self-improvement loop that uses an LLM judge to
+attribute failure modes and generate corrective DPO pairs — is *how* we build
+the agent. The environment, tasks, and reward graders are designed to
+stress-test exactly the capabilities a deployed negotiation bot needs.
+
+**BazaarBot is an OpenEnv-compliant environment** where a buyer LLM purchases
+real items (1,417 Amazon listings with MRP and street-price anchors) from an
+adversarial rule-based seller. Four seller personalities (default, deceptive,
+impatient, collaborative) each leak hidden state through a distinct
+distribution of behavioral tells. Eight graded tasks span single-deal
+baselines, hidden-deadline pressure, multi-episode reputation, personality-
+specific stress tests, multi-buyer arenas, and the `read_the_tells` task
+where verbal claims are deliberately uncorrelated with behavior.
 
 ## Theme Alignment
 
