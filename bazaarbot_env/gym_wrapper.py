@@ -170,6 +170,168 @@ def parse_action(text: str, fallback_price: float = 30.0) -> dict[str, Any]:
         return {"action": "offer", "price": fallback_price, "_parse_error": True}
 
 
+def steer_bayesian_action(
+    obs: dict[str, Any] | BazaarObservation,
+    proposed_action: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply Bayesian-persuasion-inspired steering + adaptive fallback.
+
+    The model has incomplete information, so we maintain a compact posterior over
+    seller urgency/flexibility from tells and concession behavior, then gate the
+    raw model action with:
+    - a Nash-style target offer (under estimated seller cost),
+    - an adaptive close threshold near deadline (to reduce unnecessary walks),
+    - anti-premature-walk logic that prefers one more calibrated counter.
+    """
+    if isinstance(obs, BazaarObservation):
+        obs = _obs_to_dict(obs)
+
+    action = {
+        "action": str(proposed_action.get("action", "offer")),
+        "price": proposed_action.get("price"),
+    }
+
+    ask = float(obs.get("opponent_last_offer") or obs.get("seller_asking_price") or 0.0)
+    budget = float(obs.get("own_private_budget") or 0.0)
+    if ask <= 0 or budget <= 0:
+        if action["action"] == "offer" and action.get("price") is None:
+            action["price"] = round(max(1.0, fallback := budget * 0.3 if budget > 0 else 30.0), 2)
+        return action
+
+    rounds_remaining = int(obs.get("rounds_remaining") or 0)
+    max_rounds = max(1, int(obs.get("max_rounds") or rounds_remaining or 1))
+    current_round = int(obs.get("current_round") or (max_rounds - rounds_remaining))
+    late_pressure = max(0.0, min(1.0, current_round / max_rounds))
+
+    personality = str(obs.get("seller_personality") or "default")
+    prior_urgency = {
+        "default": 0.50,
+        "deceptive": 0.45,
+        "impatient": 0.68,
+        "collaborative": 0.40,
+    }.get(personality, 0.50)
+    prior_flex = {
+        "default": 0.50,
+        "deceptive": 0.30,
+        "impatient": 0.65,
+        "collaborative": 0.72,
+    }.get(personality, 0.50)
+
+    tells = obs.get("tells") or {}
+    verbal_urgency = float(tells.get("verbal_urgency") or 0.0)
+    fidget = float(tells.get("fidget_level") or 0.0)
+    emotional = float(tells.get("emotional_escalation") or 0.0)
+    deception = float(tells.get("verbal_deception_cue") or 0.0)
+    confidence = float(tells.get("verbal_confidence") or 0.5)
+    speed = str(tells.get("offer_speed") or "normal")
+    concession_pattern = str(tells.get("concession_pattern") or "steady")
+
+    speed_urgency = {"instant": 0.15, "normal": 0.05, "deliberate": -0.05}.get(speed, 0.0)
+    pattern_urgency = {
+        "front_loaded": 0.15,
+        "erratic": 0.08,
+        "stalling": -0.10,
+        "steady": 0.00,
+    }.get(concession_pattern, 0.0)
+    signal_urgency = max(
+        0.0,
+        min(
+            1.0,
+            0.35 * verbal_urgency
+            + 0.25 * fidget
+            + 0.20 * emotional
+            + 0.10 * deception
+            + 0.10 * (1.0 - confidence)
+            + speed_urgency
+            + pattern_urgency,
+        ),
+    )
+
+    seller_delta = float(obs.get("seller_last_move_delta") or 0.0)
+    concession_ratio = max(0.0, min(1.0, seller_delta / max(ask, 1.0)))
+    pattern_flex = {
+        "front_loaded": 0.22,
+        "steady": 0.08,
+        "erratic": 0.03,
+        "stalling": -0.18,
+    }.get(concession_pattern, 0.0)
+    signal_flex = max(
+        0.0,
+        min(
+            1.0,
+            0.45 * concession_ratio
+            + 0.20 * (1.0 - confidence)
+            + 0.20 * verbal_urgency
+            + 0.15 * (1.0 - deception)
+            + pattern_flex,
+        ),
+    )
+
+    posterior_urgency = max(0.0, min(1.0, 0.55 * prior_urgency + 0.45 * signal_urgency))
+    posterior_flex = max(0.0, min(1.0, 0.55 * prior_flex + 0.45 * signal_flex))
+
+    estimated_cost = ask * (0.58 - 0.18 * posterior_urgency + 0.08 * (1.0 - posterior_flex))
+    estimated_cost = max(1.0, min(estimated_cost, ask * 0.90))
+
+    # Nash bargaining point under estimated seller cost and inferred buyer power.
+    buyer_power = 0.35 + 0.40 * posterior_urgency + 0.20 * posterior_flex - 0.30 * late_pressure
+    buyer_power = max(0.20, min(0.85, buyer_power))
+    nash_target = (1.0 - buyer_power) * budget + buyer_power * estimated_cost
+    nash_target = max(1.0, min(nash_target, min(budget * 0.95, ask * 1.02)))
+
+    # Adaptive fallback: grow acceptance threshold late so we close more often.
+    close_slack = 0.28 + 0.45 * late_pressure + 0.12 * (1.0 - posterior_urgency)
+    accept_threshold = nash_target + (budget - nash_target) * close_slack
+    accept_threshold = min(accept_threshold, budget * 0.95)
+
+    floor_offer = max(1.0, min(nash_target * 0.85, ask * 0.65, budget * 0.85))
+    ceiling_offer = min(accept_threshold, ask * (0.90 + 0.08 * late_pressure))
+    if rounds_remaining <= 2:
+        floor_offer = max(floor_offer, ask * 0.87)
+        ceiling_offer = max(ceiling_offer, floor_offer)
+    if ceiling_offer < floor_offer:
+        floor_offer = ceiling_offer
+
+    own_last_offer = obs.get("own_last_offer")
+    own_last_offer = float(own_last_offer) if own_last_offer is not None else None
+
+    if action["action"] == "accept":
+        if ask > accept_threshold and rounds_remaining > 1:
+            action["action"] = "offer"
+            action["price"] = round(max(floor_offer, min(ceiling_offer, nash_target)), 2)
+        else:
+            action["price"] = None
+        return action
+
+    if action["action"] == "walk":
+        if rounds_remaining <= 1 and ask > budget * 0.98:
+            action["price"] = None
+            return action
+        # Anti-premature walk: take one calibrated close attempt first.
+        if ask <= accept_threshold and rounds_remaining <= 2:
+            action["action"] = "accept"
+            action["price"] = None
+            return action
+        action["action"] = "offer"
+        probe_start = own_last_offer if own_last_offer is not None else floor_offer
+        probe_price = max(floor_offer, min(ceiling_offer, probe_start + max(1.0, ask * 0.06)))
+        action["price"] = round(probe_price, 2)
+        return action
+
+    # Offer path: clip to Bayesian/Nash band and auto-close late if ask is acceptable.
+    if rounds_remaining <= 1 and ask <= accept_threshold:
+        return {"action": "accept", "price": None}
+
+    proposed_price = action.get("price")
+    if proposed_price is None:
+        proposed_price = (floor_offer + ceiling_offer) / 2
+    proposed_price = float(proposed_price)
+    steered_price = max(floor_offer, min(ceiling_offer, proposed_price))
+    action["price"] = round(steered_price, 2)
+    action["action"] = "offer"
+    return action
+
+
 class BazaarGymEnv:
     """Minimal gym-like wrapper over BazaarEnvironment for in-process training."""
 

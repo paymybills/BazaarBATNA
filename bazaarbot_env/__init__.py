@@ -40,6 +40,7 @@ from .gym_wrapper import (
     format_observation,
     parse_action,
     rollout_episode,
+    steer_bayesian_action,
     strip_think_tags,
 )
 
@@ -66,5 +67,6 @@ __all__ = [
     "format_observation",
     "parse_action",
     "rollout_episode",
+    "steer_bayesian_action",
     "strip_think_tags",
 ]

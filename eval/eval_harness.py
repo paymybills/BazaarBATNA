@@ -32,6 +32,7 @@ from bazaarbot_env import (
     TASKS,
     format_observation,
     parse_action,
+    steer_bayesian_action,
 )
 
 
@@ -60,7 +61,11 @@ def rule_based_policy(obs: dict) -> dict:
     return {"action": "offer", "price": round(price, 2)}
 
 
-def make_ollama_policy(model_name: str, host: str = "http://localhost:11434") -> Policy:
+def make_ollama_policy(
+    model_name: str,
+    host: str = "http://localhost:11434",
+    use_bayesian_steering: bool = True,
+) -> Policy:
     """Chat-completion policy hitting an Ollama-served model.
 
     Robust to the common LLM failure modes: non-JSON output, wrapped in
@@ -91,6 +96,8 @@ def make_ollama_policy(model_name: str, host: str = "http://localhost:11434") ->
         )
         # Clean up the sentinel from parse_action before returning to env
         action.pop("_parse_error", None)
+        if use_bayesian_steering:
+            action = steer_bayesian_action(obs, action)
         return action
 
     return policy
@@ -183,10 +190,10 @@ def resolve_policy(args: argparse.Namespace) -> tuple[str, Policy]:
         return "rule_based", rule_based_policy
     if kind == "ollama":
         name = args.model or "bestdealbot"
-        return f"ollama:{name}", make_ollama_policy(name)
+        return f"ollama:{name}", make_ollama_policy(name, use_bayesian_steering=True)
     if kind == "baseline":
         name = args.baseline_model or "llama3.2:3b"
-        return f"baseline:{name}", make_ollama_policy(name)
+        return f"baseline:{name}", make_ollama_policy(name, use_bayesian_steering=False)
     raise ValueError(f"unknown policy: {kind}")
 
 
