@@ -165,10 +165,28 @@ def _chat(
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
-    if hasattr(tok, "apply_chat_template"):
-        prompt = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    else:
-        prompt = f"[SYSTEM]\n{system}\n\n[USER]\n{user}\n\n[ASSISTANT]\n"
+    # Some models (e.g. gemma-4-E4B) ship without tokenizer.chat_template set.
+    # Try apply_chat_template; if it fails, use a Gemma-style manual prompt.
+    has_template = (
+        hasattr(tok, "apply_chat_template")
+        and getattr(tok, "chat_template", None) is not None
+    )
+    prompt = None
+    if has_template:
+        try:
+            prompt = tok.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        except Exception:
+            prompt = None
+    if prompt is None:
+        # Gemma format: <start_of_turn>role\ncontent<end_of_turn>
+        # System gets folded into user (Gemma doesn't have a system role).
+        combined_user = f"{system}\n\n{user}" if system else user
+        prompt = (
+            f"<start_of_turn>user\n{combined_user}<end_of_turn>\n"
+            f"<start_of_turn>model\n"
+        )
 
     inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=2048).to(bundle.model.device)
     gen_kwargs: dict[str, Any] = {
