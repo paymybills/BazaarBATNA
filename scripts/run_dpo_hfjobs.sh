@@ -19,7 +19,7 @@ set -eo pipefail
 
 FLAVOR="${FLAVOR:-a10g-large}"
 N_PAIRS="${N_PAIRS:-100}"
-BUYER_BASE="${BUYER_BASE:-meta-llama/Llama-3.1-8B-Instruct}"
+BUYER_BASE="${BUYER_BASE:-unsloth/Meta-Llama-3.1-8B-Instruct}"
 BUYER_ADAPTER="${BUYER_ADAPTER:-PayMyBills/bestdealbot-v2}"
 TEMP_A="${TEMP_A:-0.5}"
 TEMP_B="${TEMP_B:-0.9}"
@@ -132,6 +132,7 @@ fi
 
 # Train
 HF_PUSH=1 \
+BASE_MODEL="$BUYER_BASE" \
 PAIRS_PATH=data/dpo_pairs.jsonl \
 SFT_HF_REPO="$SFT_HF_REPO" \
 REPO_ID="$REPO_ID" \

@@ -38,11 +38,11 @@ TAG_SUFFIX="${TAG_SUFFIX:-}"           # extra filename suffix, e.g. tells_on / 
 # - STEER:   1 = enable Bayesian seller-tell steering, 0 = off
 #
 # Order matters: cheapest first so a partial run still gives a story.
-LADDER="${LADDER:-llama_3b_base|meta-llama/Llama-3.2-3B-Instruct|-|0
-sauda_3b_sft|meta-llama/Llama-3.2-3B-Instruct|PayMyBills/bestdealbot-3b-sft|1
-llama_8b_base|meta-llama/Llama-3.1-8B-Instruct|-|0
-sauda_8b_v2_sft|meta-llama/Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v2|1
-sauda_8b_v3_dpo|meta-llama/Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v3-dpo|1}"
+LADDER="${LADDER:-llama_3b_base|unsloth/Llama-3.2-3B-Instruct|-|0
+sauda_3b_sft|unsloth/Llama-3.2-3B-Instruct|PayMyBills/bestdealbot-3b-sft|1
+llama_8b_base|unsloth/Meta-Llama-3.1-8B-Instruct|-|0
+sauda_8b_v2_sft|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v2|1
+sauda_8b_v3_dpo|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v3-dpo|1}"
 
 DETACH="-d"
 if [ "${1:-}" = "--foreground" ]; then
