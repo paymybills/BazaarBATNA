@@ -19,6 +19,7 @@ set -eo pipefail
 
 FLAVOR="${FLAVOR:-a10g-large}"
 N_PAIRS="${N_PAIRS:-100}"
+MAX_ROUNDS="${MAX_ROUNDS:-6}"
 BUYER_BASE="${BUYER_BASE:-unsloth/Meta-Llama-3.1-8B-Instruct}"
 BUYER_ADAPTER="${BUYER_ADAPTER:-PayMyBills/bestdealbot-v2}"
 TEMP_A="${TEMP_A:-0.5}"
@@ -110,6 +111,7 @@ else
         --seller-model "$SELLER_MODEL" \
         --temp-a "$TEMP_A" \
         --temp-b "$TEMP_B" \
+        --max-rounds "$MAX_ROUNDS" \
         --n "$N_PAIRS" \
         --out data/dpo_pairs.jsonl
     # Mirror the pairs to a dataset repo so future runs can SKIP_PAIR_BUILD=1
@@ -189,6 +191,7 @@ hf jobs run \
     -e BUYER_ADAPTER="$BUYER_ADAPTER" \
     -e TEMP_A="$TEMP_A" \
     -e TEMP_B="$TEMP_B" \
+    -e MAX_ROUNDS="$MAX_ROUNDS" \
     -e SELLER_MODEL="$SELLER_MODEL" \
     -e SFT_HF_REPO="$SFT_HF_REPO" \
     -e REPO_ID="$REPO_ID" \

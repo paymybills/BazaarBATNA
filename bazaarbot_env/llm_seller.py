@@ -188,10 +188,23 @@ def _chat(
             f"<start_of_turn>model\n"
         )
 
+    # Resolve stop tokens. Gemma uses <end_of_turn>; Llama-3.1 uses <|eot_id|>.
+    # Default eos alone often doesn't fire on chat-formatted prompts → model
+    # runs to max_new_tokens (30s+ on A10G at 4-bit) instead of stopping after
+    # the assistant message.
+    eos_ids: list[int] = []
+    if isinstance(tok.eos_token_id, int):
+        eos_ids.append(tok.eos_token_id)
+    for stop_tok in ("<end_of_turn>", "<|eot_id|>"):
+        tid = tok.convert_tokens_to_ids(stop_tok)
+        if isinstance(tid, int) and tid != tok.unk_token_id and tid not in eos_ids:
+            eos_ids.append(tid)
+
     inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=2048).to(bundle.model.device)
     gen_kwargs: dict[str, Any] = {
         "max_new_tokens": max_new_tokens,
         "pad_token_id": tok.eos_token_id,
+        "eos_token_id": eos_ids if eos_ids else tok.eos_token_id,
     }
     if temperature > 0:
         gen_kwargs.update({"do_sample": True, "temperature": temperature, "top_p": 0.9})
@@ -360,7 +373,7 @@ class LLMSeller:
             self.model,
             self._system_prompt(),
             user_prompt,
-            max_new_tokens=240,
+            max_new_tokens=120,
             temperature=0.35,
         )
 

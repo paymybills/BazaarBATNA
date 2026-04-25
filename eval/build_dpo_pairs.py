@@ -80,12 +80,29 @@ def _buyer_sample(
     adapter: str | None,
     obs: dict[str, Any],
     temperature: float,
-    max_new_tokens: int = 96,
+    max_new_tokens: int = 64,
 ) -> dict[str, Any]:
-    """Sample one buyer action from the HF model at the given temperature."""
+    """Sample one buyer action from the HF model at the given temperature.
+
+    Llama-3.1-Instruct emits `<|eot_id|>` (turn boundary), not the default
+    `<|end_of_text|>`. Without passing both as eos_token_id the model runs
+    to max_new_tokens every time — 30s/turn on A10G. We pass both, so the
+    model can stop early when it finishes its turn.
+    """
     import torch
 
     tok, model, device = _load_buyer(base_model, adapter)
+
+    # Resolve stop tokens: include <|eot_id|> if present (Llama-3.1) plus the
+    # default eos. Falls back gracefully on non-Llama tokenizers.
+    eos_ids = []
+    default_eos = tok.eos_token_id
+    if isinstance(default_eos, int):
+        eos_ids.append(default_eos)
+    eot = tok.convert_tokens_to_ids("<|eot_id|>")
+    if isinstance(eot, int) and eot != tok.unk_token_id and eot not in eos_ids:
+        eos_ids.append(eot)
+
     messages = [
         {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
         {"role": "user", "content": format_observation(obs)},
@@ -107,6 +124,7 @@ def _buyer_sample(
             do_sample=temperature > 0,
             temperature=max(temperature, 1e-5),
             top_p=0.9,
+            eos_token_id=eos_ids if eos_ids else tok.eos_token_id,
             pad_token_id=tok.eos_token_id,
         )
     text = tok.decode(out[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
