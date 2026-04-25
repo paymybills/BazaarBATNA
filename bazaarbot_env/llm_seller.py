@@ -391,19 +391,22 @@ class LLMSeller:
                 price = self._next_counter(buyer_offer)
             price = max(float(price), self.reservation)
 
-            # Counter must improve on buyer's offer (otherwise just accept it)
-            if buyer_offer is not None and price <= float(buyer_offer):
-                if float(buyer_offer) >= self.reservation:
-                    out["action"] = "accept"
-                    out["price"] = round(float(buyer_offer), 2)
-                    out["message"] = self._sanitize("Alright, let's do it.")
-                else:
-                    price = max(self.reservation, float(buyer_offer) + max(1.0, self.asking * 0.02))
-                    out["price"] = round(float(price), 2)
+            # If buyer's offer is at/above our reservation, just accept it —
+            # the LLM doesn't know the reservation so it'll keep countering
+            # forever even when the deal is already good for us.
+            if buyer_offer is not None and float(buyer_offer) >= self.reservation:
+                out["action"] = "accept"
+                out["price"] = round(float(buyer_offer), 2)
+                out["message"] = self._sanitize("Alright, that works. Deal.")
+            elif buyer_offer is not None and price <= float(buyer_offer):
+                # Counter that doesn't improve on buyer offer makes no sense;
+                # bump it up by a small step
+                price = max(self.reservation, float(buyer_offer) + max(1.0, self.asking * 0.02))
+                out["price"] = round(float(price), 2)
+                self._last_counter = float(out["price"])
             else:
                 out["price"] = round(float(price), 2)
-
-            self._last_counter = float(out["price"])
+                self._last_counter = float(out["price"])
 
         else:  # walk
             # Anti-premature-walk: if early in negotiation (< 3 seller turns done),
