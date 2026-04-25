@@ -1,0 +1,36 @@
+{
+  "ollama:bestdealbot/amazon_realistic": {
+    "n": 20,
+    "mean_normalized_surplus": 0.9132,
+    "mean_task_score": 0.9132,
+    "deal_rate": 1.0,
+    "mean_rounds": 7.5,
+    "mean_surplus_on_deal": 0.9132
+  },
+  "ollama:bestdealbot/read_the_tells": {
+    "n": 20,
+    "mean_normalized_surplus": 0.4176,
+    "mean_task_score": 0.4176,
+    "deal_rate": 1.0,
+    "mean_rounds": 2.0,
+    "mean_surplus_on_deal": 0.4176
+  },
+  "ollama:bestdealbot/career_10": {
+    "n": 20,
+    "mean_normalized_surplus": 0.9672,
+    "mean_task_score": 0.6841,
+    "deal_rate": 1.0,
+    "mean_rounds": 7.75,
+    "mean_surplus_on_deal": 0.9672
+  },
+  "_meta": {
+    "policy": "ollama:bestdealbot",
+    "n_per_task": 20,
+    "tasks": [
+      "amazon_realistic",
+      "read_the_tells",
+      "career_10"
+    ],
+    "elapsed_s": 1791.1
+  }
+}

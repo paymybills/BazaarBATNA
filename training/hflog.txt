@@ -1,0 +1,312 @@
+
+
+Command
+
+bash -c 'set -eux apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null pip install -q --no-cache-dir \ "torch>=2.4" \ "huggingface_hub>=0.30" \ "transformers>=4.46" \ "accelerate>=1.1" \ "bitsandbytes>=0.44" \ "datasets>=3.0" \ "sentencepiece>=0.2" \ "requests>=2.31" \ "pydantic>=2.0" git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo cd /workspace/repo mkdir -p data python - <<PYEOF import json, requests URLS = { "train": "https://worksheets.codalab.org/rest/bundles/0xd34bbbc5fb3b4fccbd19e10756ca8dd7/contents/blob/parsed.json", "dev": "https://worksheets.codalab.org/rest/bundles/0x15c4160b43d44ee3a8386cca98da138c/contents/blob/parsed.json", } def to_float(x): if x is None: return None try: return float(str(x).replace("$","").replace(",","")) except: return None def flatten(ex): sc = ex.get("scenario") or {} kbs = sc.get("kbs") or [] seller = next((kb for kb in kbs if (kb.get("personal") or {}).get("Role","").lower()=="seller"), kbs[0] if kbs else None) if not seller: return None item = seller.get("item") or {} desc = item.get("Description") if isinstance(desc, list): desc = " ".join(str(x) for x in desc) price = to_float(item.get("Price") or (seller.get("personal") or {}).get("Target")) if price is None: return None return {"category": sc.get("category","unknown"), "title": str(item.get("Title") or "untitled"), "description": str(desc or ""), "price": price} for split, name in [("train","train"), ("dev","dev")]: raw = requests.get(URLS[split], timeout=120).json() rows = [r for ex in raw if (r := flatten(ex))] with open(f"data/{name}.json","w") as f: json.dump(rows, f) print(f" data/{name}.json: {len(rows)} listings") PYEOF PYTHONPATH=. python eval/seller_quality.py \ --model "$MODEL" \ --split "$SPLIT" \ --n "$N_EPISODES" \ --seed "$SEED" LATEST_RUN=$(ls -1dt runs/*_seller_quality | head -1) echo "Uploading $LATEST_RUN to $RESULTS_REPO ..." RUN_NAME=$(basename "$LATEST_RUN") RESULTS_REPO="$RESULTS_REPO" RUN_NAME="$RUN_NAME" LATEST_RUN="$LATEST_RUN" N_EPISODES="$N_EPISODES" python - <<PYEOF import os from huggingface_hub import HfApi api = HfApi() repo_id = os.environ["RESULTS_REPO"] api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True) api.upload_folder( folder_path=os.environ["LATEST_RUN"], path_in_repo=os.environ["RUN_NAME"], repo_id=repo_id, repo_type="dataset", commit_message=f"seller_quality run from HF Jobs (n={os.environ['\''N_EPISODES'\'']})", ) print(f"Pushed to https://huggingface.co/datasets/{repo_id}/tree/main/{os.environ['\''RUN_NAME'\'']}") PYEOF echo "DONE"'
+
+Environment variables
+
+MODEL=google/gemma-4-E4B N_EPISODES=10 RESULTS_REPO=PayMyBills/seller-quality-runs SEED=42 SPLIT=dev
+
+Secrets
+
+    HF_TOKEN
+
+Logs
+
+===== Job started at 2026-04-25 12:13:01 =====
+
++ apt-get update -qq
+
++ apt-get install -y -qq git ca-certificates
+
+debconf: unable to initialize frontend: Dialog
+
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+
+debconf: falling back to frontend: Readline
+
+debconf: unable to initialize frontend: Readline
+
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 49.)
+
+debconf: falling back to frontend: Teletype
+
+debconf: unable to initialize frontend: Teletype
+
+debconf: (This frontend requires a controlling tty.)
+
+debconf: falling back to frontend: Noninteractive
+
++ pip install -q --no-cache-dir 'torch>=2.4' 'huggingface_hub>=0.30' 'transformers>=4.46' 'accelerate>=1.1' 'bitsandbytes>=0.44' 'datasets>=3.0' 'sentencepiece>=0.2' 'requests>=2.31' 'pydantic>=2.0'
+
+===== Job started at 2026-04-25 12:13:01 =====
+
++ apt-get update -qq
+
++ apt-get install -y -qq git ca-certificates
+
+debconf: unable to initialize frontend: Dialog
+
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+
+debconf: falling back to frontend: Readline
+
+debconf: unable to initialize frontend: Readline
+
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 49.)
+
+debconf: falling back to frontend: Teletype
+
+debconf: unable to initialize frontend: Teletype
+
+debconf: (This frontend requires a controlling tty.)
+
+debconf: falling back to frontend: Noninteractive
+
++ pip install -q --no-cache-dir 'torch>=2.4' 'huggingface_hub>=0.30' 'transformers>=4.46' 'accelerate>=1.1' 'bitsandbytes>=0.44' 'datasets>=3.0' 'sentencepiece>=0.2' 'requests>=2.31' 'pydantic>=2.0'
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 24.0 -> 26.0.1
+
+[notice] To update, run: pip install --upgrade pip
+
+===== Job started at 2026-04-25 12:13:01 =====
+
++ apt-get update -qq
+
++ apt-get install -y -qq git ca-certificates
+
+debconf: unable to initialize frontend: Dialog
+
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+
+debconf: falling back to frontend: Readline
+
+debconf: unable to initialize frontend: Readline
+
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 49.)
+
+debconf: falling back to frontend: Teletype
+
+debconf: unable to initialize frontend: Teletype
+
+debconf: (This frontend requires a controlling tty.)
+
+debconf: falling back to frontend: Noninteractive
+
++ pip install -q --no-cache-dir 'torch>=2.4' 'huggingface_hub>=0.30' 'transformers>=4.46' 'accelerate>=1.1' 'bitsandbytes>=0.44' 'datasets>=3.0' 'sentencepiece>=0.2' 'requests>=2.31' 'pydantic>=2.0'
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 24.0 -> 26.0.1
+
+[notice] To update, run: pip install --upgrade pip
+
++ git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo
+
+Cloning into '/workspace/repo'...
+
++ cd /workspace/repo
+
++ mkdir -p data
+
++ python -
+
+  data/train.json: 5247 listings
+
+  data/dev.json: 597 listings
+
++ PYTHONPATH=.
+
++ python eval/seller_quality.py --model google/gemma-4-E4B --split dev --n 10 --seed 42
+
+
+config.json:   0%|          | 0.00/5.11k [00:00<?, ?B/s][A
+config.json: 100%|██████████| 5.11k/5.11k [00:00<00:00, 22.2MB/s]
+
+
+tokenizer_config.json:   0%|          | 0.00/881 [00:00<?, ?B/s][A
+tokenizer_config.json: 100%|██████████| 881/881 [00:00<00:00, 3.52MB/s]
+
+
+tokenizer.json:   0%|          | 0.00/32.2M [00:00<?, ?B/s][A
+tokenizer.json: 100%|██████████| 32.2M/32.2M [00:00<00:00, 76.7MB/s]
+
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+
+
+model.safetensors:   0%|          | 0.00/16.0G [00:00<?, ?B/s][A
+
+
+model.safetensors:   1%|          | 129M/16.0G [00:01<02:04, 127MB/s][A
+
+
+model.safetensors:   3%|▎         | 470M/16.0G [00:02<01:08, 226MB/s][A
+
+
+model.safetensors:   6%|▌         | 924M/16.0G [00:03<00:58, 258MB/s][A
+
+
+model.safetensors:  10%|▉         | 1.60G/16.0G [00:04<00:36, 391MB/s][A
+
+
+model.safetensors:  14%|█▍        | 2.20G/16.0G [00:06<00:31, 433MB/s][A
+
+
+model.safetensors:  25%|██▌       | 4.01G/16.0G [00:07<00:15, 775MB/s][A
+
+
+model.safetensors:  31%|███▏      | 5.02G/16.0G [00:08<00:14, 748MB/s][A
+
+
+model.safetensors:  41%|████▏     | 6.63G/16.0G [00:11<00:13, 691MB/s][A
+
+
+model.safetensors:  50%|█████     | 8.01G/16.0G [00:12<00:10, 764MB/s][A
+
+
+model.safetensors:  57%|█████▋    | 9.15G/16.0G [00:13<00:08, 837MB/s][A
+
+
+model.safetensors:  65%|██████▌   | 10.4G/16.0G [00:14<00:05, 944MB/s][A
+
+===== Job started at 2026-04-25 12:13:01 =====
+
++ apt-get update -qq
+
++ apt-get install -y -qq git ca-certificates
+
+debconf: unable to initialize frontend: Dialog
+
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+
+debconf: falling back to frontend: Readline
+
+debconf: unable to initialize frontend: Readline
+
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 49.)
+
+debconf: falling back to frontend: Teletype
+
+debconf: unable to initialize frontend: Teletype
+
+debconf: (This frontend requires a controlling tty.)
+
+debconf: falling back to frontend: Noninteractive
+
++ pip install -q --no-cache-dir 'torch>=2.4' 'huggingface_hub>=0.30' 'transformers>=4.46' 'accelerate>=1.1' 'bitsandbytes>=0.44' 'datasets>=3.0' 'sentencepiece>=0.2' 'requests>=2.31' 'pydantic>=2.0'
+
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 24.0 -> 26.0.1
+
+[notice] To update, run: pip install --upgrade pip
+
++ git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo
+
+Cloning into '/workspace/repo'...
+
++ cd /workspace/repo
+
++ mkdir -p data
+
++ python -
+
+  data/train.json: 5247 listings
+
+  data/dev.json: 597 listings
+
++ PYTHONPATH=.
+
++ python eval/seller_quality.py --model google/gemma-4-E4B --split dev --n 10 --seed 42
+
+
+config.json:   0%|          | 0.00/5.11k [00:00<?, ?B/s][A
+config.json: 100%|██████████| 5.11k/5.11k [00:00<00:00, 22.2MB/s]
+
+
+tokenizer_config.json:   0%|          | 0.00/881 [00:00<?, ?B/s][A
+tokenizer_config.json: 100%|██████████| 881/881 [00:00<00:00, 3.52MB/s]
+
+
+tokenizer.json:   0%|          | 0.00/32.2M [00:00<?, ?B/s][A
+tokenizer.json: 100%|██████████| 32.2M/32.2M [00:00<00:00, 76.7MB/s]
+
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+
+
+model.safetensors:   0%|          | 0.00/16.0G [00:00<?, ?B/s][A
+
+
+model.safetensors:   1%|          | 129M/16.0G [00:01<02:04, 127MB/s][A
+
+
+model.safetensors:   3%|▎         | 470M/16.0G [00:02<01:08, 226MB/s][A
+
+
+model.safetensors:   6%|▌         | 924M/16.0G [00:03<00:58, 258MB/s][A
+
+
+model.safetensors:  10%|▉         | 1.60G/16.0G [00:04<00:36, 391MB/s][A
+
+
+model.safetensors:  14%|█▍        | 2.20G/16.0G [00:06<00:31, 433MB/s][A
+
+
+model.safetensors:  25%|██▌       | 4.01G/16.0G [00:07<00:15, 775MB/s][A
+
+
+model.safetensors:  31%|███▏      | 5.02G/16.0G [00:08<00:14, 748MB/s][A
+
+
+model.safetensors:  41%|████▏     | 6.63G/16.0G [00:11<00:13, 691MB/s][A
+
+
+model.safetensors:  50%|█████     | 8.01G/16.0G [00:12<00:10, 764MB/s][A
+
+
+model.safetensors:  57%|█████▋    | 9.15G/16.0G [00:13<00:08, 837MB/s][A
+
+
+model.safetensors:  65%|██████▌   | 10.4G/16.0G [00:14<00:05, 944MB/s][A
+
+
+model.safetensors:  72%|███████▏  | 11.6G/16.0G [00:16<00:05, 847MB/s][A
+
+
+model.safetensors:  82%|████████▏ | 13.1G/16.0G [00:17<00:03, 925MB/s][A
+
+
+model.safetensors:  90%|████████▉ | 14.3G/16.0G [00:19<00:01, 852MB/s][A
+model.safetensors: 100%|██████████| 16.0G/16.0G [00:20<00:00, 783MB/s]
+
+
+Loading weights:   0%|          | 0/2076 [00:00<?, ?it/s][A/usr/local/lib/python3.11/site-packages/bitsandbytes/backends/cuda/ops.py:213: FutureWarning: _check_is_size will be removed in a future PyTorch release along with guard_size_oblivious.     Use _check(i >= 0) instead.
+
+  torch._check_is_size(blocksize)
+
+
+Loading weights:  36%|███▋      | 755/2076 [00:02<00:04, 299.11it/s][A
+
+
+Loading weights:  51%|█████     | 1055/2076 [00:03<00:03, 282.68it/s][A
+
+
+Loading weights:  64%|██████▍   | 1330/2076 [00:04<00:02, 278.06it/s][A
+Loading weights: 100%|██████████| 2076/2076 [00:05<00:00, 397.70it/s]
+
+
+generation_config.json:   0%|          | 0.00/181 [00:00<?, ?B/s][A
+generation_config.json: 100%|██████████| 181/181 [00:00<00:00, 996kB/s]
+
+/usr/local/lib/python3.11/site-packages/bitsandbytes/backends/cuda/ops.py:468: FutureWarning: _check_is_size will be removed in a future PyTorch release along with guard_size_oblivious.     Use _check(i >= 0) instead.
+
+  torch._check_is_size(blocksize)
+
+[transformers] The following generation flags are not valid and may be ignored: ['top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+  [1/10] persona=flexible outcome=walk rounds=1
+
+  [2/10] persona=default outcome=walk rounds=1

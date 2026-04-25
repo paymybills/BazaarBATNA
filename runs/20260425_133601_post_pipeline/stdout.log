@@ -53,3 +53,50 @@
   }
 }[14:00:02] Stopping ministral to free VRAM ...
 [?2026h[?25l[1G⠙ [K[?25h[?2026l[?25l[?2026h[?25l[1G[K[?25h[?2026l[2K[1G[?25h[14:00:05] Pre-warming bestdealbot ...
+[14:01:11] Starting bestdealbot eval re-run with conversation realism ...
+Running eval: policy=ollama:bestdealbot, tasks=['amazon_realistic', 'read_the_tells', 'career_10'], n=20
+  task=amazon_realistic  10 20 
+  task=read_the_tells  10 20 
+  task=career_10  10 20 
+
+Wrote 60 episode results to runs/20260425_133601_post_pipeline/eval_out/results_ollama_bestdealbot.jsonl
+Summary: runs/20260425_133601_post_pipeline/eval_out/summary_ollama_bestdealbot.json
+
+  ollama:bestdealbot/amazon_realistic
+    surplus=0.913  score=0.913  deal=1.00  rounds=7.5
+  ollama:bestdealbot/read_the_tells
+    surplus=0.418  score=0.418  deal=1.00  rounds=2.0
+  ollama:bestdealbot/career_10
+    surplus=0.967  score=0.684  deal=1.00  rounds=7.75
+[14:31:03] Mirroring results to eval/out_v2/ ...
+[14:31:03] Recomputing symmetric scores ...
+Found 3 result files
+
+=== baseline_llama3.2_3b  (60 episodes) ===
+  overall: share=0.4706 win=0.3333 mutual_loss=0.1167
+  amazon_realistic: share=0.2341 win=0.0 mutual_loss=0.0
+  read_the_tells: share=0.4736 win=0.0 mutual_loss=0.35
+  career_10: share=0.705 win=1.0 mutual_loss=0.0
+
+=== ollama_bestdealbot  (60 episodes) ===
+  overall: share=0.7675 win=0.6667 mutual_loss=0.0
+  amazon_realistic: share=0.9132 win=1.0 mutual_loss=0.0
+  read_the_tells: share=0.4176 win=0.0 mutual_loss=0.0
+  career_10: share=0.9717 win=1.0 mutual_loss=0.0
+
+=== rule_based  (60 episodes) ===
+  overall: share=0.6207 win=0.3667 mutual_loss=0.3333
+  amazon_realistic: share=0.4165 win=0.05 mutual_loss=0.05
+  read_the_tells: share=0.8224 win=0.05 mutual_loss=0.95
+  career_10: share=0.8045 win=1.0 mutual_loss=0.0
+
+=== HEADLINE TABLE ===
+Policy                              buyer_share   win_rate    mutual_loss   rounds
+baseline_llama3.2_3b                      0.471        33%            12%      2.0
+ollama_bestdealbot                        0.767        67%             0%      5.8
+rule_based                                0.621        37%            33%      3.2
+
+Full logs: runs/20260425_143103_scoring
+[14:31:03] All done. Run dir: runs/20260425_133601_post_pipeline
+[14:31:03] Logs: runs/20260425_133601_post_pipeline/stdout.log
+[14:31:03] v2 eval results: runs/20260425_133601_post_pipeline/eval_out

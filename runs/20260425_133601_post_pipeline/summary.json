@@ -1,0 +1,6 @@
+{
+  "status": "complete",
+  "extractor_eval_summary": "{   "rule_based": {     "mean_abs_err_urgency": 0.1792,     "mean_abs_err_confidence": 0.2753,     "mean_abs_err_deception": 0.0195,     "mean_firm_correct": 0.5399,     "mean_deception_flagged": 0.0,     "n": 500,     "elapsed_s": 0.0   },   "ministral-3:3b": {     "mean_abs_err_urgency": 0.2339,     "mean_abs_err_confidence": 0.2859,     "mean_abs_err_deception": 0.1261,     "mean_firm_correct": 0.5297,     "mean_deception_flagged": 0.3333,     "n": 500,     "elapsed_s": 3011.5   },   "deltas": {     "delta_abs_err_urgency": 0.0547,     "delta_abs_err_confidence": 0.010599999999999998,     "delta_abs_err_deception": 0.10659999999999999,     "delta_firm_correct": -0.010200000000000098,     "delta_deception_flagged": 0.3333   } }",
+  "v2_eval_dir": "runs/20260425_133601_post_pipeline/eval_out",
+  "log": "runs/20260425_133601_post_pipeline/stdout.log"
+}

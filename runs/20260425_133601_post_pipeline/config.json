@@ -1,0 +1,7 @@
+{
+  "pipeline": "post_extractor_pipeline",
+  "timestamp": "20260425_133601",
+  "watched_extractor_eval": "runs/20260425_130912_extractor_eval",
+  "git_sha": "af7b31d",
+  "phases": ["wait_extractor", "stop_ministral", "warm_bestdealbot", "eval_v2", "scoring"]
+}

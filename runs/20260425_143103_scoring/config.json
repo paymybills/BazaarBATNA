@@ -1,0 +1,12 @@
+{
+  "input_files": [
+    "eval/out/results_baseline_llama3.2_3b.jsonl",
+    "eval/out/results_ollama_bestdealbot.jsonl",
+    "eval/out/results_rule_based.jsonl"
+  ],
+  "metric": "symmetric_buyer_share",
+  "git_sha": "af7b31d",
+  "argv": [
+    "eval/scoring.py"
+  ]
+}
