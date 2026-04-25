@@ -72,7 +72,7 @@ def make_hf_policy(
     adapter_name: str | None = None,
     use_bayesian_steering: bool = True,
     temperature: float = 0.7,
-    max_new_tokens: int = 96,
+    max_new_tokens: int = 64,
 ) -> Policy:
     """HF Transformers buyer policy. Loads a base model (4-bit if CUDA), optionally
     attaches a PEFT adapter on top. Used for the scaling-ladder eval where we
@@ -85,15 +85,22 @@ def make_hf_policy(
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    import os as _os
+    dtype_choice = _os.environ.get("BUYER_DTYPE", "4bit").lower()
     kwargs: dict[str, Any] = {"device_map": "auto", "trust_remote_code": True}
     if torch.cuda.is_available():
-        kwargs["torch_dtype"] = torch.bfloat16
-        kwargs["quantization_config"] = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
+        if dtype_choice == "4bit":
+            kwargs["torch_dtype"] = torch.bfloat16
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+        elif dtype_choice == "fp16":
+            kwargs["torch_dtype"] = torch.float16
+        else:
+            kwargs["torch_dtype"] = torch.bfloat16
     else:
         kwargs["torch_dtype"] = torch.float32
 
@@ -117,6 +124,14 @@ def make_hf_policy(
                 prompt = None
         if prompt is None:
             prompt = f"{system}\n\n{user}\n"
+        # Resolve turn-boundary stop tokens (Llama-3 <|eot_id|>, Gemma <end_of_turn>)
+        eos_ids = []
+        if isinstance(tok.eos_token_id, int):
+            eos_ids.append(tok.eos_token_id)
+        for stop in ("<|eot_id|>", "<end_of_turn>"):
+            tid = tok.convert_tokens_to_ids(stop)
+            if isinstance(tid, int) and tid != tok.unk_token_id and tid not in eos_ids:
+                eos_ids.append(tid)
         inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=2048).to(model.device)
         with torch.no_grad():
             out = model.generate(
@@ -125,6 +140,7 @@ def make_hf_policy(
                 do_sample=temperature > 0,
                 temperature=max(temperature, 1e-5),
                 top_p=0.9,
+                eos_token_id=eos_ids if eos_ids else tok.eos_token_id,
                 pad_token_id=tok.eos_token_id,
             )
         text = tok.decode(out[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)

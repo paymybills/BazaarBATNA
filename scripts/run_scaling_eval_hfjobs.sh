@@ -27,6 +27,9 @@ IMAGE="${IMAGE:-python:3.11-slim}"
 # SELLER_MODEL when the task is configured; we set that env-var inside the
 # container. Default = the same Gemma we ran in seller_quality.
 SELLER_MODEL="${SELLER_MODEL:-google/gemma-4-E4B}"
+# DTYPE: "4bit" (default low-VRAM, slow), "bf16" (~5x faster generates)
+BUYER_DTYPE="${BUYER_DTYPE:-bf16}"
+SELLER_DTYPE="${SELLER_DTYPE:-bf16}"
 # Ablation knobs (forwarded to eval/eval_harness.py)
 ENABLE_NLP="${ENABLE_NLP:-0}"          # 1 = route seller msgs through ministral NLP extractor
 TAG_SUFFIX="${TAG_SUFFIX:-}"           # extra filename suffix, e.g. tells_on / tells_off
@@ -39,10 +42,8 @@ TAG_SUFFIX="${TAG_SUFFIX:-}"           # extra filename suffix, e.g. tells_on / 
 #
 # Order matters: cheapest first so a partial run still gives a story.
 LADDER="${LADDER:-llama_3b_base|unsloth/Llama-3.2-3B-Instruct|-|0
-sauda_3b_sft|unsloth/Llama-3.2-3B-Instruct|PayMyBills/bestdealbot-3b-sft|1
 llama_8b_base|unsloth/Meta-Llama-3.1-8B-Instruct|-|0
-sauda_8b_v2_sft|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v2|1
-sauda_8b_v3_dpo|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v3-dpo|1}"
+sauda_8b_v2|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v2|1}"
 
 DETACH="-d"
 if [ "${1:-}" = "--foreground" ]; then
@@ -216,6 +217,8 @@ hf jobs run \
     -e SEED_BASE="$SEED_BASE" \
     -e TASKS="$TASKS" \
     -e SELLER_MODEL="$SELLER_MODEL" \
+    -e BUYER_DTYPE="$BUYER_DTYPE" \
+    -e SELLER_DTYPE="$SELLER_DTYPE" \
     -e ENABLE_NLP="$ENABLE_NLP" \
     -e TAG_SUFFIX="$TAG_SUFFIX" \
     -e RESULTS_REPO="$RESULTS_REPO" \
