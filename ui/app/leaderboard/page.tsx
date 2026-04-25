@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Trophy, ArrowUpRight } from "lucide-react";
 
-/* ── Hardcoded eval data from eval/out/summary_*.json ── */
+/* ── Hardcoded eval data ── */
 interface PolicyResult {
   policy: string;
   label: string;
@@ -51,63 +51,39 @@ const policies: PolicyResult[] = [
 const taskNames = ["amazon_realistic", "read_the_tells", "career_10"] as const;
 
 function avgSurplus(p: PolicyResult): number {
-  return (
-    (p.tasks.amazon_realistic.surplus +
-      p.tasks.read_the_tells.surplus +
-      p.tasks.career_10.surplus) /
-    3
-  );
+  return (p.tasks.amazon_realistic.surplus + p.tasks.read_the_tells.surplus + p.tasks.career_10.surplus) / 3;
 }
 
 function avgDealRate(p: PolicyResult): number {
-  return (
-    (p.tasks.amazon_realistic.deal_rate +
-      p.tasks.read_the_tells.deal_rate +
-      p.tasks.career_10.deal_rate) /
-    3
-  );
+  return (p.tasks.amazon_realistic.deal_rate + p.tasks.read_the_tells.deal_rate + p.tasks.career_10.deal_rate) / 3;
 }
 
 export default function LeaderboardPage() {
   const [viewMode, setViewMode] = useState<"overall" | "per_task">("overall");
-
   const sorted = [...policies].sort((a, b) => avgSurplus(b) - avgSurplus(a));
 
-  const medal = (i: number) => {
-    if (i === 0) return "text-yellow-400";
-    if (i === 1) return "text-gray-300";
-    if (i === 2) return "text-amber-600";
-    return "text-foreground/40";
-  };
-
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      <div className="flex items-start justify-between mb-6">
+    <div className="max-w-5xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
+      <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-16 border-b border-border pb-8">
         <div>
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
-            <Trophy size={22} className="text-warning" /> Leaderboard
-          </h1>
-          <p className="text-sm text-foreground/50">
-            Agent rankings by mean normalized surplus. n=20 episodes per task, 3 tasks.
+          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic">Benchmarks.lib</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
+            Automated Evaluation Logs // n=20 eps/task
           </p>
         </div>
-        <div className="flex gap-1 bg-surface border border-border rounded-lg p-0.5">
+        <div className="flex bg-surface border border-border p-1">
           <button
             onClick={() => setViewMode("overall")}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              viewMode === "overall"
-                ? "bg-accent/15 text-accent"
-                : "text-foreground/50 hover:text-foreground"
+            className={`px-4 py-2 text-[10px] uppercase tracking-widest font-black transition-all ${
+              viewMode === "overall" ? "bg-foreground text-background" : "text-foreground/40 hover:text-foreground"
             }`}
           >
             Overall
           </button>
           <button
             onClick={() => setViewMode("per_task")}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              viewMode === "per_task"
-                ? "bg-accent/15 text-accent"
-                : "text-foreground/50 hover:text-foreground"
+            className={`px-4 py-2 text-[10px] uppercase tracking-widest font-black transition-all ${
+              viewMode === "per_task" ? "bg-foreground text-background" : "text-foreground/40 hover:text-foreground"
             }`}
           >
             Per Task
@@ -117,15 +93,14 @@ export default function LeaderboardPage() {
 
       {/* Overall view */}
       {viewMode === "overall" && (
-        <div className="rounded-xl bg-surface border border-border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="border border-border">
+          <table className="w-full text-[11px] uppercase tracking-wider">
             <thead>
-              <tr className="border-b border-border text-xs text-foreground/50 uppercase tracking-wider">
-                <th className="px-5 py-3 text-left w-12">#</th>
-                <th className="px-5 py-3 text-left">Agent</th>
-                <th className="px-5 py-3 text-right">Mean Surplus</th>
-                <th className="px-5 py-3 text-right">Deal Rate</th>
-                <th className="px-5 py-3 text-right">n/task</th>
+              <tr className="border-b border-border bg-surface text-foreground/40 font-black">
+                <th className="px-6 py-4 text-left w-16">Rank</th>
+                <th className="px-6 py-4 text-left">Entity</th>
+                <th className="px-6 py-4 text-right">Surplus</th>
+                <th className="px-6 py-4 text-right">Success</th>
               </tr>
             </thead>
             <tbody>
@@ -134,32 +109,21 @@ export default function LeaderboardPage() {
                 return (
                   <tr
                     key={p.policy}
-                    className={`border-b border-border/50 transition-colors ${
-                      isOurs
-                        ? "bg-accent/[0.04] hover:bg-accent/[0.08]"
-                        : "hover:bg-surface-2/50"
+                    className={`border-b border-border last:border-0 transition-colors ${
+                      isOurs ? "bg-foreground text-background" : "hover:bg-surface"
                     }`}
                   >
-                    <td className={`px-5 py-4 font-bold text-lg ${medal(i)}`}>{i + 1}</td>
-                    <td className={`px-5 py-4 font-medium ${isOurs ? "text-accent" : ""}`}>
+                    <td className="px-6 py-6 font-mono opacity-40">{String(i + 1).padStart(2, '0')}</td>
+                    <td className="px-6 py-6 font-black italic">
                       {p.label}
-                      {isOurs && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-accent/15 text-accent rounded font-semibold">
-                          OURS
-                        </span>
-                      )}
+                      {isOurs && <span className={`ml-3 italic text-[9px] ${isOurs ? "opacity-60" : ""}`}>── MolBhav</span>}
                     </td>
-                    <td className="px-5 py-4 text-right font-mono">
-                      <span className={isOurs ? "text-accent font-semibold text-base" : "text-foreground/70"}>
-                        {avgSurplus(p).toFixed(4)}
-                      </span>
+                    <td className="px-6 py-6 text-right font-mono font-bold text-sm">
+                      {avgSurplus(p).toFixed(4)}
                     </td>
-                    <td className="px-5 py-4 text-right font-mono">
-                      <span className={avgDealRate(p) >= 0.9 ? "text-green-400" : "text-foreground/70"}>
-                        {(avgDealRate(p) * 100).toFixed(0)}%
-                      </span>
+                    <td className="px-6 py-6 text-right font-mono opacity-50">
+                      {(avgDealRate(p) * 100).toFixed(0)}%
                     </td>
-                    <td className="px-5 py-4 text-right text-foreground/40">{p.n_per_task}</td>
                   </tr>
                 );
               })}
@@ -170,24 +134,21 @@ export default function LeaderboardPage() {
 
       {/* Per-task view */}
       {viewMode === "per_task" && (
-        <div className="space-y-6">
+        <div className="space-y-12">
           {taskNames.map((task) => {
-            const taskSorted = [...policies].sort(
-              (a, b) => b.tasks[task].surplus - a.tasks[task].surplus
-            );
+            const taskSorted = [...policies].sort((a, b) => b.tasks[task].surplus - a.tasks[task].surplus);
             return (
-              <div key={task} className="rounded-xl bg-surface border border-border overflow-hidden">
-                <div className="px-5 py-3 border-b border-border">
-                  <code className="text-sm font-semibold text-accent">{task}</code>
+              <div key={task} className="border border-border">
+                <div className="px-6 py-4 bg-surface border-b border-border text-[10px] uppercase tracking-[0.4em] font-black italic">
+                  {task}
                 </div>
-                <table className="w-full text-sm">
+                <table className="w-full text-[10px] uppercase tracking-widest">
                   <thead>
-                    <tr className="border-b border-border text-xs text-foreground/50 uppercase tracking-wider">
-                      <th className="px-5 py-2 text-left w-12">#</th>
-                      <th className="px-5 py-2 text-left">Agent</th>
-                      <th className="px-5 py-2 text-right">Surplus</th>
-                      <th className="px-5 py-2 text-right">Deal Rate</th>
-                      <th className="px-5 py-2 text-right">Avg Rounds</th>
+                    <tr className="border-b border-border text-foreground/20">
+                      <th className="px-6 py-3 text-left w-16">#</th>
+                      <th className="px-6 py-3 text-left">Agent</th>
+                      <th className="px-6 py-3 text-right">Surplus</th>
+                      <th className="px-6 py-3 text-right">Rounds</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -197,27 +158,14 @@ export default function LeaderboardPage() {
                       return (
                         <tr
                           key={p.policy}
-                          className={`border-b border-border/50 ${
-                            isOurs ? "bg-accent/[0.04]" : ""
+                          className={`border-b border-border last:border-0 transition-colors ${
+                            isOurs ? "bg-foreground text-background" : "hover:bg-surface"
                           }`}
                         >
-                          <td className={`px-5 py-3 font-bold ${medal(i)}`}>{i + 1}</td>
-                          <td className={`px-5 py-3 font-medium ${isOurs ? "text-accent" : ""}`}>
-                            {p.label}
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono">
-                            <span className={isOurs ? "text-accent font-semibold" : "text-foreground/70"}>
-                              {d.surplus.toFixed(4)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono">
-                            <span className={d.deal_rate >= 0.9 ? "text-green-400" : d.deal_rate >= 0.5 ? "text-foreground/70" : "text-danger"}>
-                              {(d.deal_rate * 100).toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono text-foreground/50">
-                            {d.rounds.toFixed(1)}
-                          </td>
+                          <td className="px-6 py-4 font-mono opacity-30">{i + 1}</td>
+                          <td className="px-6 py-4 font-black">{p.label}</td>
+                          <td className="px-6 py-4 text-right font-mono font-bold">{d.surplus.toFixed(4)}</td>
+                          <td className="px-6 py-4 text-right font-mono opacity-40">{d.rounds.toFixed(1)}</td>
                         </tr>
                       );
                     })}
@@ -230,28 +178,17 @@ export default function LeaderboardPage() {
       )}
 
       {/* Submit CTA */}
-      <div className="mt-8 p-6 rounded-xl bg-surface border border-border text-center">
-        <h2 className="font-semibold text-lg mb-2">Submit Your Agent</h2>
-        <p className="text-sm text-foreground/50 mb-4 max-w-lg mx-auto">
-          Build an OpenEnv-compliant buyer agent and submit it to compete against MolBhav.
-          See the{" "}
-          <a
-            href="https://github.com/paymybills/BazaarBATNA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:underline"
-          >
-            GitHub README
-          </a>{" "}
-          for the submission flow.
+      <div className="mt-24 p-12 border border-border text-center bg-surface">
+        <h2 className="font-black text-xl uppercase tracking-tighter mb-4 italic">Submit Verification</h2>
+        <p className="text-[11px] uppercase tracking-widest text-foreground/40 mb-8 max-w-md mx-auto leading-relaxed">
+          OpenEnv agents must be compatible with BazaarBATNA protocol. Evaluation requires n=20 episodes per task.
         </p>
         <a
-          href="https://github.com/paymybills/BazaarBATNA#submit-your-agent"
+          href="https://github.com/paymybills/BazaarBATNA"
           target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-accent text-background rounded-lg font-medium text-sm hover:bg-accent/90"
+          className="inline-flex items-center gap-3 px-10 py-4 bg-foreground text-background font-black text-xs uppercase tracking-[0.3em] hover:invert transition-all"
         >
-          <ArrowUpRight size={14} /> Submit on GitHub
+          <ArrowUpRight size={14} /> GitHub Protocol
         </a>
       </div>
     </div>

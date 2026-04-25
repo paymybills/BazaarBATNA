@@ -26,35 +26,50 @@ export function ReplayControls({
   onSeek,
 }: Props) {
   return (
-    <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-2">
-      <button onClick={onReset} className="p-1.5 hover:bg-surface-2 rounded" title="Reset">
-        <RotateCcw size={16} />
-      </button>
-      <button onClick={onStepBack} className="p-1.5 hover:bg-surface-2 rounded" disabled={currentStep <= 0} title="Step back">
-        <SkipBack size={16} />
-      </button>
-      <button
-        onClick={isPlaying ? onPause : onPlay}
-        className="p-2 bg-accent/15 text-accent hover:bg-accent/25 rounded-lg"
-        title={isPlaying ? "Pause" : "Play"}
-      >
-        {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-      </button>
-      <button onClick={onStepForward} className="p-1.5 hover:bg-surface-2 rounded" disabled={currentStep >= totalSteps} title="Step forward">
-        <SkipForward size={16} />
-      </button>
+    <div className="flex flex-col md:flex-row items-center gap-6 bg-background border border-border p-6">
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={onReset} 
+          className="p-2 text-foreground/30 hover:text-foreground transition-colors" 
+          title="Reset"
+        >
+          <RotateCcw size={16} strokeWidth={3} />
+        </button>
+        <button 
+          onClick={onStepBack} 
+          className="p-2 text-foreground/30 hover:text-foreground transition-colors disabled:opacity-0" 
+          disabled={currentStep <= 0} 
+          title="Step back"
+        >
+          <SkipBack size={16} strokeWidth={3} />
+        </button>
+        <button
+          onClick={isPlaying ? onPause : onPlay}
+          className="w-12 h-12 bg-foreground text-background flex items-center justify-center hover:invert transition-all"
+          title={isPlaying ? "Pause" : "Play"}
+        >
+          {isPlaying ? <Pause size={20} strokeWidth={3} /> : <Play size={20} fill="currentColor" />}
+        </button>
+        <button 
+          onClick={onStepForward} 
+          className="p-2 text-foreground/30 hover:text-foreground transition-colors disabled:opacity-0" 
+          disabled={currentStep >= totalSteps} 
+          title="Step forward"
+        >
+          <SkipForward size={16} strokeWidth={3} />
+        </button>
+      </div>
 
-      {/* Scrubber */}
-      <div className="flex-1 flex items-center gap-2">
+      <div className="flex-1 w-full flex items-center gap-4">
         <input
           type="range"
           min={0}
           max={totalSteps}
           value={currentStep}
           onChange={(e) => onSeek(Number(e.target.value))}
-          className="flex-1 accent-accent h-1.5 cursor-pointer"
+          className="flex-1 accent-foreground grayscale h-1 cursor-pointer"
         />
-        <span className="text-xs font-mono text-foreground/50 w-16 text-right">
+        <span className="text-[10px] uppercase font-black tracking-widest text-foreground/40 w-20 text-right">
           {currentStep} / {totalSteps}
         </span>
       </div>

@@ -24,7 +24,7 @@ interface Props {
   budget: number;
   cost: number;
   dealPrice?: number | null;
-  activeRound?: number; // for replay cursor
+  activeRound?: number;
 }
 
 export function NegotiationChart({
@@ -34,7 +34,6 @@ export function NegotiationChart({
   dealPrice,
   activeRound,
 }: Props) {
-  // Build per-round data with ZOPA band
   const maxRound = Math.max(...history.map((h) => h.round), 1);
   const data: Array<Record<string, number | null>> = [];
 
@@ -57,34 +56,44 @@ export function NegotiationChart({
   }
 
   return (
-    <div className="w-full h-[400px]">
+    <div className="w-full h-[400px] font-sans">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3e" />
+        <ComposedChart data={data} margin={{ top: 20, right: 40, left: 0, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="1 1" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
             dataKey="round"
-            stroke="#666"
-            label={{ value: "Round", position: "insideBottom", offset: -5, fill: "#666" }}
+            stroke="#333"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            label={{ value: "ROUND_TRACER", position: "insideBottom", offset: -10, fill: "#333", fontSize: 9, fontWeight: 900, letterSpacing: 2 }}
           />
           <YAxis
-            stroke="#666"
+            stroke="#333"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
             domain={[Math.max(0, cost - 10), budget + 10]}
-            label={{ value: "Price", angle: -90, position: "insideLeft", fill: "#666" }}
+            label={{ value: "VALUATION_INR", angle: -90, position: "insideLeft", fill: "#333", fontSize: 9, fontWeight: 900, letterSpacing: 2 }}
           />
           <Tooltip
             contentStyle={{
-              background: "#1a1a2e",
-              border: "1px solid #2a2a3e",
-              borderRadius: "8px",
-              color: "#ededed",
+              background: "#000",
+              border: "1px solid #222",
+              borderRadius: "0px",
+              color: "#fff",
+              fontSize: "10px",
+              textTransform: "uppercase",
+              letterSpacing: "1px"
             }}
+            itemStyle={{ color: "#fff", fontWeight: "bold" }}
+            cursor={{ stroke: "#444", strokeWidth: 1 }}
             formatter={(value, name) => [
-              `${Number(value)?.toFixed(0)}`,
-              name === "seller" ? "Seller" : name === "buyer" ? "Buyer" : String(name),
+              `₹${Number(value)?.toFixed(0)}`,
+              name === "seller" ? "SELLER" : name === "buyer" ? "USER" : String(name),
             ]}
           />
 
-          {/* ZOPA band */}
           <Area
             type="monotone"
             dataKey="zopaTop"
@@ -96,39 +105,38 @@ export function NegotiationChart({
             type="monotone"
             dataKey="zopaBottom"
             stackId="zopa-bg"
-            fill="rgba(78, 205, 196, 0.05)"
+            fill="rgba(255,255,255,0.02)"
             stroke="transparent"
           />
 
-          {/* Reference lines */}
-          <ReferenceLine y={budget} stroke="#666" strokeDasharray="5 5" label={{ value: "Budget", fill: "#888", position: "right" }} />
-          <ReferenceLine y={cost} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "Cost", fill: "#f59e0b", position: "right" }} />
-          <ReferenceLine y={(budget + cost) / 2} stroke="#ffd93d" strokeDasharray="3 3" label={{ value: "Nash", fill: "#ffd93d", position: "left" }} />
-
+          <ReferenceLine y={budget} stroke="#222" strokeDasharray="3 3" label={{ value: "LIMIT", fill: "#333", fontSize: 8, fontWeight: 900, position: "right" }} />
+          <ReferenceLine y={cost} stroke="#222" strokeDasharray="3 3" label={{ value: "COST", fill: "#333", fontSize: 8, fontWeight: 900, position: "right" }} />
+          
           {dealPrice && (
-            <ReferenceLine y={dealPrice} stroke="#4ecdc4" strokeWidth={2} label={{ value: `Deal @ ${dealPrice.toFixed(0)}`, fill: "#4ecdc4", position: "right" }} />
+            <ReferenceLine y={dealPrice} stroke="#fff" strokeWidth={1} label={{ value: `SETTLED_@_${dealPrice.toFixed(0)}`, fill: "#fff", fontSize: 9, fontWeight: 900, position: "right" }} />
           )}
 
           {activeRound !== undefined && (
-            <ReferenceLine x={activeRound} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="4 4" />
+            <ReferenceLine x={activeRound} stroke="#fff" strokeWidth={1} strokeDasharray="1 1" opacity={0.3} />
           )}
 
-          {/* Offer lines */}
           <Line
             type="monotone"
             dataKey="seller"
-            stroke="#ff6b6b"
-            strokeWidth={3}
-            dot={{ r: 6, fill: "#ff6b6b", stroke: "#ff6b6b" }}
+            stroke="#666"
+            strokeWidth={1}
+            dot={{ r: 3, fill: "#000", stroke: "#666", strokeWidth: 1 }}
+            activeDot={{ r: 5, fill: "#fff" }}
             connectNulls
             name="seller"
           />
           <Line
             type="monotone"
             dataKey="buyer"
-            stroke="#4ecdc4"
-            strokeWidth={3}
-            dot={{ r: 6, fill: "#4ecdc4", stroke: "#4ecdc4" }}
+            stroke="#fff"
+            strokeWidth={2}
+            dot={{ r: 4, fill: "#fff", stroke: "#000", strokeWidth: 1 }}
+            activeDot={{ r: 6, fill: "#fff", stroke: "#000" }}
             connectNulls
             name="buyer"
           />

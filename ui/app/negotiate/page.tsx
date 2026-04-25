@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { NegotiationChart } from "../components/NegotiationChart";
 import { TellsDisplay } from "../components/TellsDisplay";
+import { Send, User, Brain, AlertCircle, RefreshCw } from "lucide-react";
 
 interface HistoryEntry {
   round: number;
@@ -66,7 +67,7 @@ export default function NegotiatePage() {
       setScore(null);
       setOfferPrice(Math.round(res.observation.seller_asking_price * 0.5));
     } catch (e) {
-      setMessages([{ round: 0, text: `Error: ${e}`, type: "error" }]);
+      setMessages([{ round: 0, text: `Protocol Error: ${e}`, type: "error" }]);
     }
     setLoading(false);
   }, [selectedTask, personality]);
@@ -86,52 +87,22 @@ export default function NegotiatePage() {
           next_episode?: number;
         };
 
-        // Detect invalid accept: server returns a non-advancing turn with this message.
-        const invalidAccept =
-          action === "accept" &&
-          typeof newObs.message === "string" &&
-          newObs.message.toLowerCase().includes("no seller offer to accept");
-
-        // Detect episode rollover (career mode): server resets and returns new opening obs.
+        const invalidAccept = action === "accept" && typeof newObs.message === "string" && newObs.message.toLowerCase().includes("no seller offer to accept");
         const episodeRolled = Boolean(info.episode_done);
 
-        // Update history
         const newHistory = [...history];
         if (!invalidAccept) {
           if (action === "offer" && price !== undefined) {
-            newHistory.push({
-              round: newObs.current_round,
-              actor: "buyer",
-              action: "offer",
-              price,
-            });
+            newHistory.push({ round: newObs.current_round, actor: "buyer", action: "offer", price });
           }
           if (action === "accept") {
-            newHistory.push({
-              round: newObs.current_round,
-              actor: "buyer",
-              action: "accept",
-              price: obs.opponent_last_offer,
-            });
+            newHistory.push({ round: newObs.current_round, actor: "buyer", action: "accept", price: obs.opponent_last_offer });
           }
           if (action === "walk") {
-            newHistory.push({
-              round: newObs.current_round,
-              actor: "buyer",
-              action: "walk",
-              price: null,
-            });
+            newHistory.push({ round: newObs.current_round, actor: "buyer", action: "walk", price: null });
           }
-          if (
-            !episodeRolled &&
-            newObs.opponent_last_offer !== obs.opponent_last_offer
-          ) {
-            newHistory.push({
-              round: newObs.current_round,
-              actor: "seller",
-              action: newObs.deal_outcome === "deal" ? "accept" : "counter",
-              price: newObs.opponent_last_offer,
-            });
+          if (!episodeRolled && newObs.opponent_last_offer !== obs.opponent_last_offer) {
+            newHistory.push({ round: newObs.current_round, actor: "seller", action: newObs.deal_outcome === "deal" ? "accept" : "counter", price: newObs.opponent_last_offer });
           }
         }
 
@@ -142,38 +113,15 @@ export default function NegotiatePage() {
         setMessages((m) => {
           const next = [...m];
           if (invalidAccept) {
-            next.push({
-              round: newObs.current_round,
-              text: `Invalid: ${newObs.message}`,
-              type: "error",
-            });
+            next.push({ round: newObs.current_round, text: `Violation: ${newObs.message}`, type: "error" });
             return next;
           }
-          const actionLabel =
-            action === "offer"
-              ? `You offer ${price?.toFixed(0)} rupees`
-              : action === "accept"
-              ? "You accept"
-              : "You walk away";
-          next.push({
-            round: newObs.current_round,
-            text: actionLabel,
-            type: "buyer",
-          });
+          const actionLabel = action === "offer" ? `Offer Submitted: ₹${price?.toFixed(0)}` : action === "accept" ? "Acceptance Protocol Sent" : "Exit Sequence Initiated";
+          next.push({ round: newObs.current_round, text: actionLabel, type: "buyer" });
           if (episodeRolled) {
-            next.push({
-              round: newObs.current_round,
-              text: `— Episode ${info.episode ?? "?"} ended · Episode ${
-                info.next_episode ?? newObs.episode_number
-              } begins (${newObs.item_name}) —`,
-              type: "divider",
-            });
+            next.push({ round: newObs.current_round, text: `E${info.episode} Complete // E${info.next_episode || newObs.episode_number} Initialized (${newObs.item_name})`, type: "divider" });
           }
-          next.push({
-            round: newObs.current_round,
-            text: newObs.message,
-            type: "seller",
-          });
+          next.push({ round: newObs.current_round, text: newObs.message, type: "seller" });
           return next;
         });
 
@@ -185,7 +133,7 @@ export default function NegotiatePage() {
           } catch {}
         }
       } catch (e) {
-        setMessages((m) => [...m, { round: 0, text: `Error: ${e}`, type: "error" }]);
+        setMessages((m) => [...m, { round: 0, text: `Runtime Error: ${e}`, type: "error" }]);
       }
       setLoading(false);
     },
@@ -193,188 +141,177 @@ export default function NegotiatePage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-6">Manual Negotiation</h1>
-
-      {/* Setup bar */}
-      <div className="flex flex-wrap items-end gap-4 mb-6 p-4 rounded-xl bg-surface border border-border">
+    <div className="max-w-6xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
+      <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-12 border-b border-border pb-8">
         <div>
-          <label className="block text-xs text-foreground/50 mb-1">Task</label>
-          <select
-            value={selectedTask}
-            onChange={(e) => setSelectedTask(e.target.value)}
-            className="bg-surface-2 border border-border rounded px-3 py-1.5 text-sm"
-          >
-            {Object.entries(tasks).map(([name, t]) => (
-              <option key={name} value={name}>
-                {name} ({t.difficulty})
-              </option>
-            ))}
-          </select>
+          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic">Operation.Manual</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
+            Buyer Mode // Manual Steering Control
+          </p>
         </div>
-        <div>
-          <label className="block text-xs text-foreground/50 mb-1">
-            Personality Override
-          </label>
-          <select
-            value={personality}
-            onChange={(e) => setPersonality(e.target.value)}
-            className="bg-surface-2 border border-border rounded px-3 py-1.5 text-sm"
+        <div className="flex gap-4">
+          <div className="space-y-1">
+             <label className="block text-[8px] uppercase tracking-widest text-foreground/40 font-black">Scenario</label>
+             <select
+               value={selectedTask}
+               onChange={(e) => setSelectedTask(e.target.value)}
+               className="bg-background border border-border px-3 py-1.5 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none"
+             >
+               {Object.entries(tasks).map(([name, t]) => (
+                 <option key={name} value={name}>{name}</option>
+               ))}
+             </select>
+          </div>
+          <div className="space-y-1">
+             <label className="block text-[8px] uppercase tracking-widest text-foreground/40 font-black">Persona</label>
+             <select
+               value={personality}
+               onChange={(e) => setPersonality(e.target.value)}
+               className="bg-background border border-border px-3 py-1.5 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none"
+             >
+              <option value="">Default</option>
+              <option value="deceptive">Deceptive</option>
+              <option value="impatient">Impatient</option>
+              <option value="collaborative">Collaborative</option>
+             </select>
+          </div>
+          <button
+            onClick={startNegotiation}
+            disabled={loading}
+            className="self-end px-6 py-2 bg-foreground text-background text-[10px] uppercase tracking-widest font-black hover:invert transition-all"
           >
-            <option value="">Task default</option>
-            <option value="default">Default</option>
-            <option value="deceptive">Deceptive</option>
-            <option value="impatient">Impatient</option>
-            <option value="collaborative">Collaborative</option>
-          </select>
+            {obs ? <RefreshCw size={12} strokeWidth={3} /> : "Initialize"}
+          </button>
         </div>
-        <button
-          onClick={startNegotiation}
-          disabled={loading}
-          className="px-4 py-1.5 bg-accent text-background rounded font-medium text-sm hover:bg-accent/90 disabled:opacity-50"
-        >
-          {obs ? "Restart" : "Start Negotiation"}
-        </button>
       </div>
 
       {!obs ? (
-        <div className="text-center py-20 text-foreground/40">
-          Select a task and click Start Negotiation to begin.
+        <div className="border border-border bg-surface p-24 text-center">
+          <div className="text-[10px] uppercase tracking-[0.4em] text-foreground/20 font-black">Waiting for Session Initialization...</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Chart + controls */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Metrics */}
-            <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-3 space-y-8">
+            {/* Monitor */}
+            <div className="grid grid-cols-4 gap-px bg-border border border-border">
               {[
-                { label: "Round", value: `${obs.current_round} / ${obs.max_rounds}` },
-                { label: "Budget", value: `${obs.own_private_budget.toFixed(0)}` },
-                { label: "Seller Ask", value: `${obs.opponent_last_offer?.toFixed(0) || "-"}` },
+                { label: "Temporal", value: `${obs.current_round} / ${obs.max_rounds}` },
+                { label: "Cap", value: `₹${obs.own_private_budget.toFixed(0)}` },
+                { label: "Current Bid", value: obs.opponent_last_offer ? `₹${obs.opponent_last_offer.toFixed(0)}` : "—" },
                 { label: "Reward", value: totalReward.toFixed(3) },
               ].map((m) => (
-                <div key={m.label} className="p-3 rounded-lg bg-surface border border-border">
-                  <div className="text-xs text-foreground/50">{m.label}</div>
-                  <div className="text-lg font-semibold font-mono">{m.value}</div>
+                <div key={m.label} className="bg-background p-4 text-center">
+                  <div className="text-[9px] uppercase tracking-widest text-foreground/30 mb-2 font-black">{m.label}</div>
+                  <div className="text-sm font-mono font-black">{m.value}</div>
                 </div>
               ))}
             </div>
 
-            {/* Chart */}
-            <div className="rounded-xl bg-surface border border-border p-4">
+            {/* Visualize */}
+            <div className="border border-border p-8 bg-surface">
               <NegotiationChart
                 history={history}
                 budget={obs.own_private_budget}
-                cost={tasks[selectedTask]?.description.includes("30") ? 30 : 30}
+                cost={30}
                 dealPrice={obs.deal_outcome === "deal" ? obs.opponent_last_offer : null}
               />
             </div>
 
-            {/* Action controls */}
+            {/* Interaction */}
             {!done && (
-              <div className="flex items-end gap-3 p-4 rounded-xl bg-surface border border-border">
-                <div className="flex-1">
-                  <label className="block text-xs text-foreground/50 mb-1">
-                    Your Offer Price
-                  </label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={obs.own_private_budget}
-                    value={offerPrice}
-                    onChange={(e) => setOfferPrice(Number(e.target.value))}
-                    className="w-full accent-accent"
-                  />
-                  <div className="flex justify-between text-xs text-foreground/40 mt-1">
-                    <span>1</span>
-                    <span className="text-accent font-mono font-bold text-base">
-                      {offerPrice}
-                    </span>
-                    <span>{obs.own_private_budget}</span>
+              <div className="p-8 border border-border bg-surface">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] uppercase tracking-[0.2em] font-black mb-6">Injected Offer</label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={obs.own_private_budget}
+                      value={offerPrice}
+                      onChange={(e) => setOfferPrice(Number(e.target.value))}
+                      className="w-full accent-foreground grayscale"
+                    />
+                    <div className="flex justify-between text-[10px] font-mono text-foreground/40 mt-4 font-bold">
+                      <span>MIN: ₹1</span>
+                      <span className="text-foreground font-black text-2xl">₹{offerPrice}</span>
+                      <span>CAP: {obs.own_private_budget}</span>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 flex flex-col gap-2 justify-end">
+                    <button
+                      onClick={() => submitAction("offer", offerPrice)}
+                      disabled={loading}
+                      className="w-full py-4 bg-foreground text-background font-black text-[10px] uppercase tracking-widest hover:invert transition-all flex items-center justify-center gap-2"
+                    >
+                      <Send size={12} strokeWidth={3} /> Submit Offer
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => submitAction("accept")}
+                        disabled={loading}
+                        className="py-3 border border-border text-foreground font-black text-[9px] uppercase tracking-widest hover:bg-foreground hover:text-background transition-all"
+                      >
+                        Accept Bid
+                      </button>
+                      <button
+                        onClick={() => submitAction("walk")}
+                        disabled={loading}
+                        className="py-3 border border-border text-foreground font-black text-[9px] uppercase tracking-widest hover:bg-foreground hover:text-background transition-all"
+                      >
+                        Exit
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => submitAction("offer", offerPrice)}
-                  disabled={loading}
-                  className="px-4 py-2 bg-accent text-background rounded font-medium text-sm hover:bg-accent/90 disabled:opacity-50"
-                >
-                  Offer
-                </button>
-                <button
-                  onClick={() => submitAction("accept")}
-                  disabled={loading}
-                  className="px-4 py-2 bg-green-600 text-white rounded font-medium text-sm hover:bg-green-700 disabled:opacity-50"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => submitAction("walk")}
-                  disabled={loading}
-                  className="px-4 py-2 bg-danger/80 text-white rounded font-medium text-sm hover:bg-danger disabled:opacity-50"
-                >
-                  Walk
-                </button>
               </div>
             )}
 
-            {/* Score banner */}
             {done && score !== null && (
-              <div
-                className={`p-4 rounded-xl text-center font-semibold animate-fade-in ${
-                  score >= 0.3
-                    ? "bg-green-500/10 border border-green-500/20 text-green-400"
-                    : "bg-danger/10 border border-danger/20 text-danger"
-                }`}
-              >
-                Final Score: {score.toFixed(4)}{" "}
-                {score >= 0.3 ? "-- Nice deal!" : "-- Room for improvement"}
+              <div className="p-12 border-2 border-foreground bg-foreground text-background text-center animate-fade-in">
+                <div className="text-[10px] uppercase tracking-[0.5em] font-bold mb-4 opacity-50">Session Finalized</div>
+                <div className="text-4xl font-black uppercase tracking-tighter mb-4 italic italic">
+                  Surplus Rank: {score.toFixed(4)}
+                </div>
+                <p className="text-[10px] uppercase tracking-widest opacity-50 mb-8 font-black">
+                  {score >= 0.3 ? "VERIFICATION SUCCESSFUL" : "SUB-OPTIMAL SURPLUS DETECTED"}
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-8 py-3 border-2 border-background font-black text-xs uppercase tracking-[0.3em] hover:bg-background hover:text-foreground transition-all"
+                >
+                  Restart Buffer
+                </button>
               </div>
             )}
           </div>
 
-          {/* Right: Tells + Chat log */}
-          <div className="space-y-4">
-            {/* Tells */}
+          {/* Comms */}
+          <div className="space-y-8">
             <TellsDisplay
               tells={obs.tells}
               personality={obs.seller_personality}
             />
 
-            {/* Chat log */}
-            <div className="rounded-xl bg-surface border border-border">
-              <div className="px-4 py-2 border-b border-border text-sm font-medium">
-                Negotiation Log
+            <div className="border border-border bg-surface overflow-hidden">
+              <div className="px-6 py-4 border-b border-border text-[9px] uppercase tracking-[0.2em] font-black opacity-30">
+                Transmission Buffer
               </div>
-              <div
-                ref={logRef}
-                className="p-3 max-h-80 overflow-y-auto space-y-2"
-              >
+              <div ref={logRef} className="p-6 h-[400px] overflow-y-auto space-y-4 custom-scrollbar">
                 {messages.map((msg, i) => {
                   if (msg.type === "divider") {
                     return (
-                      <div
-                        key={i}
-                        className="text-xs text-foreground/40 italic text-center py-1 border-t border-border/50 mt-2"
-                      >
+                      <div key={i} className="text-[9px] uppercase tracking-widest text-foreground/20 text-center py-4 border-t border-white/5 font-black">
                         {msg.text}
                       </div>
                     );
                   }
                   return (
-                    <div
-                      key={i}
-                      className={`text-sm animate-fade-in ${
-                        msg.type === "buyer"
-                          ? "text-accent"
-                          : msg.type === "error"
-                          ? "text-danger"
-                          : "text-foreground/70"
-                      }`}
-                    >
-                      <span className="text-xs text-foreground/30 mr-2">
-                        R{msg.round}
+                    <div key={i} className={`flex gap-4 text-[10px] font-sans leading-relaxed animate-fade-in ${msg.type === 'error' ? 'text-red-500' : ''}`}>
+                      <span className="shrink-0 w-8 text-[8px] font-mono opacity-20 pt-1 italic">[{String(msg.round).padStart(2, '0')}]</span>
+                      <span className={msg.type === "buyer" ? "text-foreground font-black uppercase tracking-widest text-[8px] shrink-0" : "text-foreground/50"}>
+                        {msg.type === "error" ? <AlertCircle size={10} className="inline mr-1" /> : ""}
+                        {msg.text}
                       </span>
-                      {msg.text}
                     </div>
                   );
                 })}

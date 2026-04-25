@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Play, Eye, Brain, BarChart3, Zap, Database, Award, Link2 as ExternalLink, Code as Github } from "lucide-react";
+import { ArrowRight, Play, Brain, BarChart3, Database, Award } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /* ── Animated counter ──────────────────────────────────── */
@@ -40,11 +40,11 @@ function Stat({ value, label, suffix = "", prefix = "" }: {
   value: number; label: string; suffix?: string; prefix?: string;
 }) {
   return (
-    <div className="flex flex-col items-center p-6 rounded-xl bg-surface border border-border hover:border-accent/20 transition-all group">
-      <div className="text-4xl md:text-5xl font-bold tracking-tight text-accent group-hover:scale-105 transition-transform">
+    <div className="flex flex-col items-center p-6 rounded-lg bg-surface border border-border hover:border-foreground/20 transition-all group">
+      <div className="text-4xl md:text-5xl font-bold tracking-tighter text-foreground group-hover:translate-y-[-2px] transition-transform">
         <AnimatedNumber value={value} suffix={suffix} prefix={prefix} />
       </div>
-      <div className="text-sm text-foreground/50 mt-2 text-center">{label}</div>
+      <div className="text-[10px] uppercase tracking-widest text-foreground/40 mt-3 text-center">{label}</div>
     </div>
   );
 }
@@ -54,12 +54,12 @@ function Pillar({ icon, title, desc }: {
   icon: React.ReactNode; title: string; desc: string;
 }) {
   return (
-    <div className="p-5 rounded-xl bg-surface border border-border hover:border-accent/20 transition-all group">
-      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent mb-3 group-hover:bg-accent/20 transition-colors">
+    <div className="p-6 rounded-lg bg-surface border border-border hover:border-foreground/30 transition-all group">
+      <div className="w-8 h-8 flex items-center justify-center text-foreground/60 mb-4 group-hover:text-foreground transition-colors">
         {icon}
       </div>
-      <h3 className="font-semibold text-base mb-1.5">{title}</h3>
-      <p className="text-sm text-foreground/50 leading-relaxed">{desc}</p>
+      <h3 className="font-bold text-sm uppercase tracking-tight mb-2">{title}</h3>
+      <p className="text-xs text-foreground/50 leading-relaxed font-light">{desc}</p>
     </div>
   );
 }
@@ -96,12 +96,11 @@ const evalData = [
 const highlightReplays = [
   {
     id: "amazon-best",
-    title: "Crompton Geyser — Agent grinds ₹7,299 → ₹2,645",
-    task: "amazon_realistic",
+    title: "Amazon Realistic Grinds",
+    task: "7,299 → 2,645",
     rounds: 8,
     surplus: 0.974,
     badge: "Best Surplus",
-    badgeColor: "bg-green-500/15 text-green-400",
     transcript: [
       { actor: "seller", text: "7299 rupees for this Crompton Gracee 5-L Instant Water Heater. Very fair." },
       { actor: "buyer", text: "Offer: ₹4,698" },
@@ -117,12 +116,11 @@ const highlightReplays = [
   },
   {
     id: "tells-deceptive",
-    title: "Silk Scarf — Agent calls the bluff",
-    task: "read_the_tells",
+    title: "Silk Scarf Deception",
+    task: "Bluff Called",
     rounds: 2,
     surplus: 0.483,
-    badge: "Deceptive Seller",
-    badgeColor: "bg-red-500/15 text-red-400",
+    badge: "Deceptive",
     transcript: [
       { actor: "seller", text: "This handwoven silk scarf is selling fast. 76, and honestly I'm losing money at that." },
       { actor: "buyer", text: "Offer: ₹66" },
@@ -132,12 +130,11 @@ const highlightReplays = [
   },
   {
     id: "career-grind",
-    title: "Silk Scarf — 8-round patience play",
-    task: "career_10",
+    title: "Career 10 Patience",
+    task: "8-round Grind",
     rounds: 8,
     surplus: 0.979,
     badge: "Long Haggle",
-    badgeColor: "bg-purple-500/15 text-purple-400",
     transcript: [
       { actor: "seller", text: "60 rupees for this handwoven silk scarf. Very fair." },
       { actor: "buyer", text: "Offer: ₹39" },
@@ -158,143 +155,139 @@ export default function HomePage() {
   const [expandedReplay, setExpandedReplay] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background selection:bg-foreground selection:text-background">
       {/* ═══ Hero ═══ */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none" />
-        <div className="max-w-5xl mx-auto px-4 pt-20 pb-16 text-center relative">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium mb-6 animate-fade-in">
-            <Zap size={12} /> OpenEnv Hackathon — BazaarBATNA + MolBhav
+      <section className="relative pt-32 pb-24 border-b border-border">
+        <div className="max-w-5xl mx-auto px-4 text-center">
+          <div className="inline-flex items-center gap-2 px-2 py-0.5 border border-border text-[10px] uppercase tracking-[0.2em] text-foreground/40 mb-10 animate-fade-in font-medium">
+            OpenEnv Hackathon 2026
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-5 animate-fade-in">
-            The negotiation agent that reads
+          <h1 className="text-5xl md:text-8xl font-black tracking-tighter leading-[0.9] mb-8 animate-fade-in uppercase">
+            Negotiate
             <br />
-            <span className="text-accent">what the seller doesn&apos;t say.</span>
+            <span className="text-foreground/40 italic">the unspoken.</span>
           </h1>
-          <p className="text-lg md:text-xl text-foreground/50 max-w-2xl mx-auto mb-8 animate-fade-in leading-relaxed">
-            <strong className="text-foreground/80">BazaarBATNA</strong> is an OpenEnv-compliant negotiation environment.{" "}
-            <strong className="text-foreground/80">MolBhav</strong> is a fine-tuned Llama 3.2 agent that
-            captures 97% of bargaining surplus using NLP tell extraction and Bayesian steering.
+          <p className="text-base md:text-lg text-foreground/40 max-w-xl mx-auto mb-12 animate-fade-in font-light tracking-tight">
+            <strong className="text-foreground font-bold">BazaarBATNA</strong> is an OpenEnv-compliant environment.{" "}
+            <strong className="text-foreground font-bold">MolBhav</strong> is a fine-tuned agent that
+            captures 97% of surplus via NLP tell extraction.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in">
             <Link
               href="/sell"
-              className="group flex items-center gap-2 px-6 py-3 bg-accent text-background rounded-lg font-semibold text-base hover:bg-accent/90 transition-all hover:shadow-lg hover:shadow-accent/20"
+              className="px-8 py-4 bg-foreground text-background rounded-none font-bold text-sm uppercase tracking-widest hover:invert transition-all flex items-center gap-3"
               id="cta-try-it"
             >
-              Try it — play as seller
-              <ArrowRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
+              Try Demo
+              <ArrowRight size={16} />
             </Link>
             <button
               onClick={() => {
                 const el = document.getElementById("highlight-replays");
                 el?.scrollIntoView({ behavior: "smooth" });
               }}
-              className="group flex items-center gap-2 px-6 py-3 bg-surface border border-border text-foreground/70 rounded-lg font-medium text-base hover:border-accent/30 hover:text-foreground transition-all"
+              className="px-8 py-4 bg-transparent border border-border text-foreground font-bold text-sm uppercase tracking-widest hover:bg-foreground hover:text-background transition-all"
               id="cta-watch-replay"
             >
-              <Play size={16} /> Watch a replay
+              Examine Replays
             </button>
           </div>
         </div>
       </section>
 
       {/* ═══ Headline Numbers ═══ */}
-      <section className="max-w-5xl mx-auto px-4 pb-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Stat value={131} prefix="+" suffix="%" label="surplus vs rule-based" />
-          <Stat value={916} prefix="+" suffix="%" label="on read_the_tells" />
-          <Stat value={100} suffix="%" label="deal rate" />
-          <Stat value={7} suffix=" GB" label="GPU footprint" />
+      <section className="max-w-7xl mx-auto px-4 py-20">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border border border-border">
+          <div className="bg-background"><Stat value={131} prefix="+" suffix="%" label="surplus gain" /></div>
+          <div className="bg-background"><Stat value={916} prefix="+" suffix="%" label="tell capture" /></div>
+          <div className="bg-background"><Stat value={100} suffix="%" label="deal success" /></div>
+          <div className="bg-background"><Stat value={7} suffix=" GB" label="GPU footprint" /></div>
         </div>
       </section>
 
       {/* ═══ Four Pillars ═══ */}
-      <section className="max-w-5xl mx-auto px-4 pb-16">
-        <h2 className="text-2xl font-bold mb-6 text-center">How MolBhav Wins</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="max-w-5xl mx-auto px-4 pb-32">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           <Pillar
             icon={<Brain size={20} />}
-            title="NLP Tell Extractor"
-            desc="Reads urgency, deception, and condition signals from free-text seller messages. No structured data needed."
+            title="Tell Extractor"
+            desc="Reads urgency and deception cues from seller text."
           />
           <Pillar
             icon={<BarChart3 size={20} />}
-            title="Bayesian Steering"
-            desc="Posterior belief updates on seller flexibility from price history + tells. Never over-anchors, never capitulates."
+            title="Bayesian Belief"
+            desc="Probabilistic updates on seller flexibility."
           />
           <Pillar
             icon={<Database size={20} />}
-            title="Synthetic Indian C2C Data"
-            desc="1,000+ Hinglish negotiation transcripts with CaSiNo strategy labels. SFT warmup ​→ GRPO → DPO."
+            title="C2C Training"
+            desc="1,000+ Hinglish negotiation transcripts."
           />
           <Pillar
             icon={<Award size={20} />}
-            title="DPO Self-Improvement"
-            desc="Judge LLM classifies failure modes, repairs bad turns, and generates DPO pairs. Closed unsupervised loop."
+            title="DPO Pipeline"
+            desc="Unsupervised self-improvement loop."
           />
         </div>
       </section>
 
       {/* ═══ Try the Demo ═══ */}
-      <section className="max-w-5xl mx-auto px-4 pb-16">
+      <section className="max-w-5xl mx-auto px-4 pb-32">
         <Link
           href="/sell"
-          className="group block p-8 rounded-2xl bg-gradient-to-br from-accent/[0.08] to-surface border border-accent/20 hover:border-accent/40 transition-all hover:shadow-lg hover:shadow-accent/5"
+          className="group block p-12 border border-border hover:bg-foreground hover:text-background transition-all"
           id="demo-callout"
         >
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-            <div className="w-14 h-14 rounded-xl bg-accent/15 flex items-center justify-center text-accent shrink-0 group-hover:bg-accent/25 transition-colors">
-              <Play size={28} />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold mb-1">Try the playable demo</h2>
-              <p className="text-foreground/50 text-sm leading-relaxed">
-                You play as the seller. Set your price, counter MolBhav&apos;s offers, and watch the
-                AI extract your tells in real-time. Can you outperform the agent?
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <Play size={48} strokeWidth={1} />
+            <div className="flex-1 text-center md:text-left">
+              <h2 className="text-2xl font-bold uppercase tracking-tighter mb-2">Live Demonstration</h2>
+              <p className="text-foreground/40 text-sm font-light group-hover:text-background/60">
+                Play as the seller. Counter MolBhav&apos;s offers and watch its live tells extraction in real-time.
               </p>
             </div>
-            <ArrowRight size={24} className="text-accent shrink-0 group-hover:translate-x-1 transition-transform hidden md:block" />
+            <ArrowRight size={32} strokeWidth={1} className="hidden md:block group-hover:translate-x-4 transition-transform" />
           </div>
         </Link>
       </section>
 
       {/* ═══ Highlight Replays ═══ */}
-      <section id="highlight-replays" className="max-w-5xl mx-auto px-4 pb-16 scroll-mt-20">
-        <h2 className="text-2xl font-bold mb-2">Highlight Replays</h2>
-        <p className="text-sm text-foreground/50 mb-6">Curated negotiations from our eval harness (n=20 per task).</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section id="highlight-replays" className="max-w-5xl mx-auto px-4 pb-32 scroll-mt-20">
+        <div className="flex items-end justify-between mb-12">
+          <div>
+            <h2 className="text-3xl font-black uppercase tracking-tighter">Case Studies</h2>
+            <p className="text-[10px] uppercase tracking-widest text-foreground/40 mt-1">Experimental Validation (n=20)</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {highlightReplays.map((replay) => (
             <div
               key={replay.id}
-              className="rounded-xl bg-surface border border-border hover:border-accent/20 transition-all overflow-hidden cursor-pointer"
+              className="border-t border-border pt-6 cursor-pointer group"
               onClick={() => setExpandedReplay(expandedReplay === replay.id ? null : replay.id)}
             >
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${replay.badgeColor}`}>
-                    {replay.badge}
-                  </span>
-                  <span className="text-xs text-foreground/30">{replay.task}</span>
-                </div>
-                <h3 className="font-semibold text-sm mb-2">{replay.title}</h3>
-                <div className="flex gap-4 text-xs text-foreground/40">
-                  <span>{replay.rounds} rounds</span>
-                  <span className="text-accent font-mono">{(replay.surplus * 100).toFixed(1)}% surplus</span>
-                </div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[10px] uppercase tracking-widest border border-border px-2 py-0.5 text-foreground/40 group-hover:border-foreground group-hover:text-foreground transition-colors">
+                  {replay.badge}
+                </span>
+              </div>
+              <h3 className="font-bold text-lg leading-tight mb-1">{replay.title}</h3>
+              <p className="text-xs text-foreground/40 mb-4">{replay.task}</p>
+              <div className="flex gap-4 text-[10px] font-mono tracking-tighter text-foreground/60">
+                <span>{replay.rounds} ROUNDS</span>
+                <span>{(replay.surplus * 100).toFixed(1)}% SURPLUS</span>
               </div>
 
               {expandedReplay === replay.id && (
-                <div className="border-t border-border px-5 py-4 space-y-2 animate-fade-in max-h-64 overflow-y-auto">
+                <div className="mt-6 pt-6 border-t border-border/50 space-y-3 animate-fade-in h-64 overflow-y-auto pr-2 custom-scrollbar">
                   {replay.transcript.map((turn, i) => (
-                    <div
-                      key={i}
-                      className={`text-xs leading-relaxed ${
-                        turn.actor === "buyer" ? "text-accent" : "text-foreground/60"
-                      }`}
-                    >
-                      <span className="font-medium">{turn.actor === "buyer" ? "MolBhav" : "Seller"}:</span>{" "}
-                      {turn.text}
+                    <div key={i} className="text-[11px] leading-relaxed">
+                      <span className="font-bold uppercase text-[9px] tracking-widest block opacity-30 mb-0.5">
+                        {turn.actor === "buyer" ? "Agent" : "Seller"}
+                      </span>
+                      <span className={turn.actor === "buyer" ? "text-foreground" : "text-foreground/50"}>
+                        {turn.text}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -305,62 +298,37 @@ export default function HomePage() {
       </section>
 
       {/* ═══ Eval Table ═══ */}
-      <section className="max-w-5xl mx-auto px-4 pb-16">
-        <h2 className="text-2xl font-bold mb-2">Evaluation Results</h2>
-        <p className="text-sm text-foreground/50 mb-6">
-          Mean normalized surplus across 3 tasks, n=20 episodes each. Higher is better.
-        </p>
-        <div className="rounded-xl bg-surface border border-border overflow-hidden">
+      <section className="max-w-5xl mx-auto px-4 pb-32">
+        <h2 className="text-xl font-bold uppercase tracking-tighter mb-8">Performance Metrics</h2>
+        <div className="border border-border">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[11px] uppercase tracking-wider">
               <thead>
-                <tr className="border-b border-border text-xs text-foreground/50 uppercase tracking-wider">
-                  <th className="px-5 py-3 text-left">Policy</th>
-                  <th className="px-5 py-3 text-right">amazon_realistic</th>
-                  <th className="px-5 py-3 text-right">read_the_tells</th>
-                  <th className="px-5 py-3 text-right">career_10</th>
-                  <th className="px-5 py-3 text-right">Deal Rate</th>
+                <tr className="border-b border-border bg-surface text-foreground/40">
+                  <th className="px-6 py-4 text-left font-black">Method</th>
+                  <th className="px-6 py-4 text-right">Amazon</th>
+                  <th className="px-6 py-4 text-right">Tells</th>
+                  <th className="px-6 py-4 text-right">Career</th>
+                  <th className="px-6 py-4 text-right">Success</th>
                 </tr>
               </thead>
               <tbody>
                 {evalData.map((row) => (
                   <tr
                     key={row.policy}
-                    className={`border-b border-border/50 transition-colors ${
-                      row.highlight
-                        ? "bg-accent/[0.04] hover:bg-accent/[0.08]"
-                        : "hover:bg-surface-2/50"
+                    className={`border-b border-border last:border-0 transition-colors ${
+                      row.highlight ? "bg-foreground text-background" : "hover:bg-surface"
                     }`}
                   >
-                    <td className={`px-5 py-3.5 font-medium ${row.highlight ? "text-accent" : ""}`}>
+                    <td className="px-6 py-5 font-black">
                       {row.label}
-                      {row.highlight && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-accent/15 text-accent rounded font-semibold">
-                          OURS
-                        </span>
-                      )}
+                      {row.highlight && <span className="ml-2 italic text-[9px]">── FIXED</span>}
                     </td>
-                    <td className="px-5 py-3.5 text-right font-mono">
-                      <span className={row.highlight ? "text-accent font-semibold" : "text-foreground/70"}>
-                        {row.amazon.surplus.toFixed(4)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono">
-                      <span className={row.highlight ? "text-accent font-semibold" : "text-foreground/70"}>
-                        {row.tells.surplus.toFixed(4)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono">
-                      <span className={row.highlight ? "text-accent font-semibold" : "text-foreground/70"}>
-                        {row.career.surplus.toFixed(4)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono">
-                      <span className={row.highlight ? "text-green-400 font-semibold" : "text-foreground/70"}>
-                        {(
-                          (row.amazon.deal_rate + row.tells.deal_rate + row.career.deal_rate) / 3 * 100
-                        ).toFixed(0)}%
-                      </span>
+                    <td className="px-6 py-5 text-right font-mono">{row.amazon.surplus.toFixed(4)}</td>
+                    <td className="px-6 py-5 text-right font-mono">{row.tells.surplus.toFixed(4)}</td>
+                    <td className="px-6 py-5 text-right font-mono">{row.career.surplus.toFixed(4)}</td>
+                    <td className="px-6 py-5 text-right font-mono">
+                      {(Math.round((row.amazon.deal_rate + row.tells.deal_rate + row.career.deal_rate) / 3 * 100))}%
                     </td>
                   </tr>
                 ))}
@@ -371,40 +339,23 @@ export default function HomePage() {
       </section>
 
       {/* ═══ Footer ═══ */}
-      <footer className="border-t border-border">
-        <div className="max-w-5xl mx-auto px-4 py-10">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div>
-              <div className="font-bold text-lg mb-1">BazaarBATNA</div>
-              <p className="text-xs text-foreground/40 max-w-md">
-                An OpenEnv-compliant negotiation environment with game theory,
-                NLP tell extraction, and multi-buyer marketplace arenas.
+      <footer className="border-t border-border bg-background">
+        <div className="max-w-5xl mx-auto px-4 py-20">
+          <div className="flex flex-col md:flex-row items-start justify-between gap-12">
+            <div className="max-w-xs">
+              <div className="font-black text-2xl uppercase tracking-tighter mb-4">Bazaar-B.</div>
+              <p className="text-[11px] leading-relaxed text-foreground/40 uppercase tracking-widest font-light">
+                OpenEnv-compliant negotiation framework. Fine-tuned Llama 3.2 benchmarks.
               </p>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <a
-                href="https://github.com/paymybills/BazaarBATNA"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-foreground/50 hover:text-foreground transition-colors"
-              >
-                <Github size={14} /> GitHub
-              </a>
-              <a
-                href="https://huggingface.co/PayMyBills/bestdealbot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-foreground/50 hover:text-foreground transition-colors"
-              >
-                <ExternalLink size={14} /> HF Model
-              </a>
-              <Link
-                href="/leaderboard"
-                className="flex items-center gap-1.5 text-foreground/50 hover:text-foreground transition-colors"
-              >
-                <Eye size={14} /> Leaderboard
-              </Link>
+            <div className="flex flex-wrap gap-x-12 gap-y-6 text-[10px] uppercase tracking-[0.2em] font-bold">
+              <a href="https://github.com/paymybills/BazaarBATNA" target="_blank" className="hover:line-through transition-all">GitHub</a>
+              <a href="https://huggingface.co/PayMyBills/bestdealbot" target="_blank" className="hover:line-through transition-all">HuggingFace</a>
+              <Link href="/leaderboard" className="hover:line-through transition-all">Leaderboard</Link>
             </div>
+          </div>
+          <div className="mt-20 pt-8 border-t border-border text-[9px] text-foreground/20 uppercase tracking-[0.4em]">
+            © 2026 MolBhav Labs. All rights reserved.
           </div>
         </div>
       </footer>
