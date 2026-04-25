@@ -1,11 +1,25 @@
 import { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "./components/Nav";
+import { SmoothScroll } from "./components/SmoothScroll";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "BazaarBATNA — AI Negotiation Agent Platform",
+  title: "BazaarBATNA — Negotiation Playground",
   description:
-    "Play against MolBhav, a fine-tuned Llama 3.2 negotiation agent that reads seller tells and captures 97% of bargaining surplus. OpenEnv-compliant environment with Bayesian steering and DPO self-improvement.",
+    "An OpenEnv negotiation playground. Watch agents haggle. Or step in yourself.",
   keywords: ["negotiation", "AI agent", "game theory", "NLP", "OpenEnv", "MolBhav", "BazaarBATNA"],
 };
 
@@ -17,9 +31,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="h-full antialiased dark"
+      className={`${inter.variable} ${jetbrains.variable} antialiased`}
     >
-      <body className="font-sans min-h-full flex flex-col bg-background text-foreground">
+      <body className="min-h-screen flex flex-col bg-background text-foreground">
+        <SmoothScroll />
         <Nav />
         <main className="flex-1">{children}</main>
       </body>

@@ -264,9 +264,11 @@ export default function SellPage() {
     <div className="max-w-6xl mx-auto px-4 py-12 selection:bg-foreground selection:text-background">
       {/* Header */}
       <div className="mb-12 text-center md:text-left">
-        <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic underline decoration-1 underline-offset-8">Simulation.v1</h1>
-        <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
-          Seller Mode // MolBhav v3.2 [DPO-Fine-Tuned]
+        <h1 className="text-4xl font-semibold tracking-tight mb-2">
+          Play
+        </h1>
+        <p className="text-eyebrow">
+          Seller Mode · vs MolBhav (Llama-3.2-3B · SFT + GRPO + Bayesian steering)
         </p>
       </div>
 

@@ -2,50 +2,74 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import { apiGet } from "../lib/api";
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/sell", label: "Try It" },
-  { href: "/negotiate", label: "Buy" },
+  { href: "/sell", label: "Play" },
   { href: "/spectate", label: "Spectate" },
-  { href: "/replay", label: "Replay" },
   { href: "/arena", label: "Arena" },
-  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/replay", label: "Replay" },
 ];
 
 export function Nav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [healthy, setHealthy] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<{ status?: string }>("/health")
+      .then(() => !cancelled && setHealthy(true))
+      .catch(() => !cancelled && setHealthy(false));
+    return () => { cancelled = true; };
+  }, []);
+
+  const dotColor = healthy === null ? "bg-foreground/30" : healthy ? "bg-good" : "bg-bad";
+  const dotPulse = healthy ? "pulse-dot" : "";
 
   return (
-    <nav className="border-b border-border bg-background sticky top-0 z-50">
-      <div className="max-w-5xl mx-auto px-4 flex items-center h-16 gap-12">
-        <Link href="/" className="font-black text-xl tracking-tighter uppercase shrink-0">
-          Bazaar<span className="opacity-30 italic font-light">B.</span>
+    <nav className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
+      <div className="max-w-7xl mx-auto px-6 flex items-center h-14 gap-10">
+        <Link
+          href="/"
+          className="font-mono text-[13px] tracking-tight shrink-0 flex items-center gap-2"
+        >
+          <span className="text-foreground font-semibold">bazaarbatna</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${dotPulse}`} aria-hidden />
         </Link>
 
-        {/* Desktop nav */}
-        <div className="hidden md:flex gap-8 flex-1">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:opacity-100 ${
-                pathname === link.href
-                  ? "text-foreground opacity-100"
-                  : "text-foreground opacity-30"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <div className="hidden md:flex gap-7 flex-1 items-center">
+          {links.map((link) => {
+            const active = pathname === link.href ||
+              (link.href !== "/" && pathname.startsWith(link.href));
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-[12px] font-medium tracking-wide transition-colors ${
+                  active ? "text-foreground" : "text-fg3 hover:text-foreground"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </div>
 
-        {/* Mobile toggle */}
+        <a
+          href="https://github.com/paymybills/BazaarBATNA"
+          target="_blank"
+          rel="noreferrer"
+          className="hidden md:inline-flex text-[11px] font-mono tracking-wide text-fg3 hover:text-foreground transition-colors"
+        >
+          github →
+        </a>
+
         <button
-          className="md:hidden ml-auto p-2"
+          className="md:hidden ml-auto p-2 text-foreground/70"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
         >
@@ -53,23 +77,23 @@ export function Nav() {
         </button>
       </div>
 
-      {/* Mobile nav */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border bg-background px-4 py-6 space-y-4 animate-fade-in">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileOpen(false)}
-              className={`block text-xs font-bold uppercase tracking-widest ${
-                pathname === link.href
-                  ? "text-foreground"
-                  : "text-foreground opacity-40"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <div className="md:hidden border-t border-border bg-background/95 backdrop-blur-xl px-6 py-5 space-y-4">
+          {links.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className={`block text-sm tracking-wide ${
+                  active ? "text-foreground" : "text-fg3"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </div>
       )}
     </nav>

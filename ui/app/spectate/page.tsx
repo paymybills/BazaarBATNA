@@ -158,9 +158,9 @@ export default function SpectatePage() {
     <div className="max-w-6xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
       <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-12 border-b border-border pb-8">
         <div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic">Observer.v2</h1>
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
-            AI vs AI Simulation // Policy Verification
+          <h1 className="text-4xl font-semibold tracking-tight mb-2">Spectate</h1>
+          <p className="text-eyebrow">
+            Watch a buyer policy negotiate against the env. Turn-by-turn.
           </p>
         </div>
       </div>
