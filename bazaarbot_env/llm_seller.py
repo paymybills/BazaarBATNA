@@ -183,7 +183,7 @@ class LLMSeller:
         self,
         listing: dict,
         role_brief: dict,
-        model: str = "google/gemma-3n-E4B-it",
+        model: str = "google/gemma-4-E4B",
     ):
         self.listing = listing
         self.role_brief = role_brief

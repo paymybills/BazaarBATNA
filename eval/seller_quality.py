@@ -235,7 +235,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="google/gemma-3n-E4B-it")
+    p.add_argument("--model", default="google/gemma-4-E4B")
     p.add_argument("--split", default="dev", choices=["train", "dev", "test"])
     p.add_argument("--n", type=int, default=50)
     p.add_argument("--seed", type=int, default=42)
