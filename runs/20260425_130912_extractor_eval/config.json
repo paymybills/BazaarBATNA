@@ -1,0 +1,12 @@
+{
+  "model": "ministral-3:3b",
+  "n_rows": 500,
+  "seed": 42,
+  "labeled_source": "chicago_hai_bargaining.jsonl",
+  "git_sha": "3878699",
+  "argv": [
+    "nlp/eval_extractor.py",
+    "--n",
+    "500"
+  ]
+}

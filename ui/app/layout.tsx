@@ -14,9 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BazaarBATNA - Negotiation Arena",
+  title: "BazaarBATNA — AI Negotiation Agent Platform",
   description:
-    "AI negotiation environment with game theory, poker tells, and multi-buyer arenas",
+    "Play against MolBhav, a fine-tuned Llama 3.2 negotiation agent that reads seller tells and captures 97% of bargaining surplus. OpenEnv-compliant environment with Bayesian steering and DPO self-improvement.",
+  keywords: ["negotiation", "AI agent", "game theory", "NLP", "OpenEnv", "MolBhav", "BazaarBATNA"],
 };
 
 export default function RootLayout({

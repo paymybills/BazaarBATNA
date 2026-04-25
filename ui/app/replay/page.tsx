@@ -1,19 +1,50 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   apiGet,
   apiPost,
   type CounterfactualResult,
   type EnvironmentState,
-  type TaskInfo,
 } from "../lib/api";
 import { NegotiationChart } from "../components/NegotiationChart";
 import { TellsDisplay } from "../components/TellsDisplay";
 import { ReplayControls } from "../components/ReplayControls";
+import { Play, Star } from "lucide-react";
+
+/* ── Curated highlights ────────────────────────────────── */
+const highlights = [
+  {
+    id: "amazon-best",
+    title: "Crompton Geyser — ₹7,299 → ₹2,645",
+    task: "amazon_realistic",
+    surplus: 0.974,
+    rounds: 8,
+    badge: "Best Surplus",
+    badgeColor: "bg-green-500/15 text-green-400",
+  },
+  {
+    id: "tells-deceptive",
+    title: "Silk Scarf — Bluff called",
+    task: "read_the_tells",
+    surplus: 0.483,
+    rounds: 2,
+    badge: "Deceptive Seller",
+    badgeColor: "bg-red-500/15 text-red-400",
+  },
+  {
+    id: "career-grind",
+    title: "Silk Scarf — 8-round patience play",
+    task: "career_10",
+    surplus: 0.979,
+    rounds: 8,
+    badge: "Long Haggle",
+    badgeColor: "bg-purple-500/15 text-purple-400",
+  },
+];
 
 export default function ReplayPage() {
-  const [tasks, setTasks] = useState<Record<string, TaskInfo>>({});
   const [state, setState] = useState<EnvironmentState | null>(null);
   const [replayStep, setReplayStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -24,26 +55,25 @@ export default function ReplayPage() {
   const [cfPrice, setCfPrice] = useState<number>(40);
   const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    apiGet<Record<string, TaskInfo>>("/tasks").then(setTasks).catch(() => {});
-    loadState();
-  }, []);
-
-  const loadState = async () => {
+  const loadState = useCallback(async () => {
     try {
       const s = await apiGet<EnvironmentState>("/state");
       setState(s);
       setReplayStep(s.offer_history.length);
       setError(null);
-    } catch (e) {
-      setError("No active session. Start a negotiation first from the Negotiate tab.");
+    } catch {
+      setError("No active session. Start a negotiation first, or watch a curated replay below.");
     }
-  };
+  }, []);
 
-  // Replay controls
+  useEffect(() => {
+    loadState();
+  }, [loadState]);
+
   const totalSteps = state?.offer_history.length ?? 0;
   const visibleHistory = state?.offer_history.slice(0, replayStep + 1) ?? [];
-  const currentRound = visibleHistory.length > 0 ? visibleHistory[visibleHistory.length - 1].round : 0;
+  const currentRound =
+    visibleHistory.length > 0 ? visibleHistory[visibleHistory.length - 1].round : 0;
 
   const play = useCallback(() => {
     setIsPlaying(true);
@@ -84,40 +114,74 @@ export default function ReplayPage() {
     }
   };
 
-  // Get tells for current replay step
   const currentTell = state?.tells_history[Math.max(0, replayStep - 1)] ?? null;
-
   const dealEntry = state?.offer_history.find((h) => h.action === "accept");
   const dealPrice = dealEntry?.price ?? null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Replay & Analysis</h1>
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Replay & Analysis</h1>
+          <p className="text-sm text-foreground/50">
+            Review past negotiations turn-by-turn, or watch curated highlights.
+          </p>
+        </div>
         <button
           onClick={loadState}
-          className="px-3 py-1.5 bg-surface border border-border rounded text-sm hover:bg-surface-2"
+          className="px-3 py-1.5 bg-surface border border-border rounded-lg text-sm hover:bg-surface-2"
         >
           Refresh State
         </button>
       </div>
 
-      {error && (
-        <div className="p-4 rounded-lg bg-surface border border-border text-sm mb-4 space-y-3">
+      {/* ═══ Curated Highlights ═══ */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-foreground/60 mb-3 flex items-center gap-1.5">
+          <Star size={14} className="text-warning" /> Curated Highlights
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {highlights.map((h) => (
+            <Link
+              key={h.id}
+              href={`/replay/${h.id}`}
+              className="group p-4 rounded-xl bg-surface border border-border hover:border-accent/20 transition-all"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${h.badgeColor}`}>
+                  {h.badge}
+                </span>
+              </div>
+              <h3 className="font-medium text-sm mb-1 group-hover:text-accent transition-colors">{h.title}</h3>
+              <div className="flex gap-3 text-xs text-foreground/40">
+                <span>{h.rounds} rounds</span>
+                <span className="font-mono text-accent">{(h.surplus * 100).toFixed(1)}%</span>
+              </div>
+              <div className="mt-3 flex items-center gap-1 text-xs text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                <Play size={10} /> Watch replay
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ Live replay from session ═══ */}
+      {error && !state && (
+        <div className="p-4 rounded-xl bg-surface border border-border text-sm mb-4 space-y-3">
           <p className="text-foreground/60">{error}</p>
           <div className="flex gap-3">
-            <a
+            <Link
               href="/negotiate"
-              className="px-3 py-1.5 bg-accent text-background rounded text-sm font-medium hover:bg-accent/90"
+              className="px-3 py-1.5 bg-accent text-background rounded-lg text-sm font-medium hover:bg-accent/90"
             >
               Play as Buyer
-            </a>
-            <a
+            </Link>
+            <Link
               href="/spectate"
-              className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm font-medium hover:bg-purple-700"
+              className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
             >
               Watch AI Play
-            </a>
+            </Link>
             <button
               onClick={async () => {
                 try {
@@ -128,7 +192,7 @@ export default function ReplayPage() {
                   setError(`Failed: ${e}`);
                 }
               }}
-              className="px-3 py-1.5 bg-surface-2 border border-border rounded text-sm hover:bg-border"
+              className="px-3 py-1.5 bg-surface-2 border border-border rounded-lg text-sm hover:bg-border"
             >
               Quick Simulate & Load
             </button>
@@ -157,7 +221,6 @@ export default function ReplayPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Chart + Replay */}
             <div className="lg:col-span-2 space-y-4">
-              {/* Chart with replay cursor */}
               <div className="rounded-xl bg-surface border border-border p-4">
                 <NegotiationChart
                   history={visibleHistory}
@@ -168,7 +231,6 @@ export default function ReplayPage() {
                 />
               </div>
 
-              {/* Replay controls */}
               <ReplayControls
                 currentStep={replayStep}
                 totalSteps={totalSteps - 1}
@@ -193,8 +255,7 @@ export default function ReplayPage() {
                       } ${entry.actor === "buyer" ? "text-accent" : "text-foreground/70"}`}
                     >
                       <span className="text-xs text-foreground/30 mr-2">R{entry.round}</span>
-                      <span className="font-medium">{entry.actor}</span>{" "}
-                      {entry.action}
+                      <span className="font-medium">{entry.actor}</span> {entry.action}
                       {entry.price != null && (
                         <span className="font-mono ml-1">@ {entry.price.toFixed(0)}</span>
                       )}
@@ -203,11 +264,9 @@ export default function ReplayPage() {
                 </div>
               </div>
 
-              {/* Counterfactual analysis */}
+              {/* Counterfactual */}
               <div className="rounded-xl bg-surface border border-border p-4">
-                <h3 className="text-sm font-medium mb-3">
-                  What-If Analysis
-                </h3>
+                <h3 className="text-sm font-medium mb-3">What-If Analysis</h3>
                 <div className="flex flex-wrap items-end gap-3 mb-3">
                   <div>
                     <label className="block text-xs text-foreground/50 mb-1">From Round</label>
@@ -279,8 +338,7 @@ export default function ReplayPage() {
                         ? "Alternative was BETTER"
                         : cfResult.counterfactual_score < cfResult.original_score
                         ? "Original was BETTER"
-                        : "Same outcome"}
-                      {" "}
+                        : "Same outcome"}{" "}
                       (delta: {(cfResult.counterfactual_score - cfResult.original_score).toFixed(4)})
                     </div>
                   </div>
@@ -288,14 +346,9 @@ export default function ReplayPage() {
               </div>
             </div>
 
-            {/* Right: Tells at current step */}
+            {/* Right: Tells */}
             <div className="space-y-4">
-              <TellsDisplay
-                tells={currentTell}
-                personality={state.seller_personality}
-              />
-
-              {/* Tells timeline */}
+              <TellsDisplay tells={currentTell} personality={state.seller_personality} />
               {state.tells_history.length > 0 && (
                 <div className="rounded-xl bg-surface border border-border p-4">
                   <h3 className="text-sm font-medium mb-2">Tell Trends</h3>

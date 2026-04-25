@@ -1,0 +1,176 @@
+{
+  "baseline_llama3.2_3b": {
+    "overall": {
+      "n": 60,
+      "mean_buyer_share": 0.4706,
+      "buyer_share_ci95": [
+        0.4168,
+        0.5255
+      ],
+      "win_rate": 0.3333,
+      "loss_rate": 0.3333,
+      "tie_rate": 0.2167,
+      "mutual_loss_rate": 0.1167,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 1.97
+    },
+    "amazon_realistic": {
+      "n": 20,
+      "mean_buyer_share": 0.2341,
+      "buyer_share_ci95": [
+        0.2061,
+        0.2628
+      ],
+      "win_rate": 0.0,
+      "loss_rate": 1.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 2.05
+    },
+    "read_the_tells": {
+      "n": 20,
+      "mean_buyer_share": 0.4736,
+      "buyer_share_ci95": [
+        0.4462,
+        0.5088
+      ],
+      "win_rate": 0.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.65,
+      "mutual_loss_rate": 0.35,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 1.9
+    },
+    "career_10": {
+      "n": 20,
+      "mean_buyer_share": 0.705,
+      "buyer_share_ci95": [
+        0.695,
+        0.715
+      ],
+      "win_rate": 1.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 1.95
+    }
+  },
+  "ollama_bestdealbot": {
+    "overall": {
+      "n": 60,
+      "mean_buyer_share": 0.7675,
+      "buyer_share_ci95": [
+        0.7034,
+        0.8289
+      ],
+      "win_rate": 0.6667,
+      "loss_rate": 0.0,
+      "tie_rate": 0.3333,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 5.77
+    },
+    "amazon_realistic": {
+      "n": 20,
+      "mean_buyer_share": 0.9132,
+      "buyer_share_ci95": [
+        0.8843,
+        0.9397
+      ],
+      "win_rate": 1.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 7.5
+    },
+    "read_the_tells": {
+      "n": 20,
+      "mean_buyer_share": 0.4176,
+      "buyer_share_ci95": [
+        0.4053,
+        0.4341
+      ],
+      "win_rate": 0.0,
+      "loss_rate": 0.0,
+      "tie_rate": 1.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 2.0
+    },
+    "career_10": {
+      "n": 20,
+      "mean_buyer_share": 0.9717,
+      "buyer_share_ci95": [
+        0.958,
+        0.9786
+      ],
+      "win_rate": 1.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 7.8
+    }
+  },
+  "rule_based": {
+    "overall": {
+      "n": 60,
+      "mean_buyer_share": 0.6207,
+      "buyer_share_ci95": [
+        0.5581,
+        0.6874
+      ],
+      "win_rate": 0.3667,
+      "loss_rate": 0.1667,
+      "tie_rate": 0.1333,
+      "mutual_loss_rate": 0.3333,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 3.23
+    },
+    "amazon_realistic": {
+      "n": 20,
+      "mean_buyer_share": 0.4165,
+      "buyer_share_ci95": [
+        0.3756,
+        0.4637
+      ],
+      "win_rate": 0.05,
+      "loss_rate": 0.5,
+      "tie_rate": 0.4,
+      "mutual_loss_rate": 0.05,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 3.8
+    },
+    "read_the_tells": {
+      "n": 20,
+      "mean_buyer_share": 0.8224,
+      "buyer_share_ci95": [
+        0.8224,
+        0.8224
+      ],
+      "win_rate": 0.05,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.95,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 2.0
+    },
+    "career_10": {
+      "n": 20,
+      "mean_buyer_share": 0.8045,
+      "buyer_share_ci95": [
+        0.7922,
+        0.8167
+      ],
+      "win_rate": 1.0,
+      "loss_rate": 0.0,
+      "tie_rate": 0.0,
+      "mutual_loss_rate": 0.0,
+      "rational_walk_rate": 0.0,
+      "mean_rounds": 3.9
+    }
+  }
+}
