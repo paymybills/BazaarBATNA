@@ -28,6 +28,168 @@ Pillars 2 and 3 run in parallel once the NLP extractor (Pillar 1 Step 1) is done
 
 ---
 
+## 📌 PINNED: Public demo plan (MolBhav site)
+
+The eval numbers are great but no one outside the team can *use* the agent. This is the demo
+that turns "trust the numbers" into "watch the agent think."
+
+### Framing
+Mirror the **Chicago HAI Kellogg study** UX. User gets a structured seller role brief
+(asking price, reservation price, bonus structure) and negotiates against MolBhav. **User
+plays seller, MolBhav plays buyer** — matches the training distribution and makes the tells
+panel meaningful (we show what the buyer extracts from the *user's* messages).
+
+### MVP (4 hours, demo-defensible)
+- [ ] `/play` route in MolBhav with one role brief (Chicago HAI house, copied from PDF)
+- [ ] Plain chat UI: user is seller, MolBhav is buyer, listing message opens
+- [ ] After each user turn, render extracted tells in a static side panel (no live overlay)
+- [ ] Pre-warm ministral + bestdealbot on page load to avoid 5s cold-start
+- [ ] cloudflared tunnel exposes `POST /extract` + `POST /buyer-step` from local FastAPI
+- [ ] **Buyer must respond in natural language** — see "Conversation realism" pin below
+
+### Stretch goal 1 — Comparable listings panel (+3 hours)
+- [ ] Pre-built `comparable_listings.json` for the demo items (no live scraping)
+- [ ] Buyer's response includes "I checked OLX, similar phones at ₹28,500" with a card
+- [ ] Inject comps into the buyer's prompt template before the action call
+- [ ] Honest README note: comps are pre-cached, not live-fetched
+
+### Stretch goal 2 — In-bubble tell highlighting (+5 hours)
+- [ ] After user sends, wrap flagged spans in their chat bubble with `<mark>` tags
+- [ ] Hover card shows tell type, score, and one-line explanation
+- [ ] Skip Grammarly-style floating overlay — too much engineering for the win
+
+### Explicitly out of scope for venue
+- Live web scraping of OLX/Quikr (blocked + legal risk)
+- Floating Grammarly-style overlay on a live textarea
+- Multi-scenario role briefs (one is enough for demo)
+
+---
+
+## 📌 PINNED: Conversation realism
+
+Current transcripts show MolBhav responding with `offer at ₹4697.82` — pure structured action,
+no natural language. That is fine for eval (the harness only scores price + outcome) but it
+**breaks the demo** because real negotiations are conversation, not vending machines.
+
+### Root cause
+The buyer's prompt template asks for a JSON action only. The structured output is what the
+Bayesian steerer reads. We never ask the model to write a *message*.
+
+### Fix (2 hours)
+- [ ] Extend buyer prompt to return `{action, price, message}` — message is one short Hinglish
+      / English line that justifies the offer ("yaar 4700 bhi zyada hai, market mein 4200 mein
+      mil raha hai")
+- [ ] Bayesian steerer continues to read `action` + `price`; `message` is just rendered to UI
+- [ ] If steerer overrides price, regenerate the message conditioned on the corrected price
+      (one extra ministral call), or template it ("okay, ₹X is what I can do")
+- [ ] Update transcripts in eval harness to capture the message field
+- [ ] Re-run a small eval batch to confirm surplus didn't regress
+
+### Why this matters
+- Demo: turns the chat from machine vs human into human vs human
+- Tells panel: gives the user something to read — they see *both* the price *and* the message
+- DPO: the message becomes part of the chosen/rejected pair, so we can train on conversational
+  quality, not just price discipline
+
+### Templates mined from data
+Don't hand-write the templated fallbacks. Mine them from the 500 Hinglish synthetic conversations
+(`data/indian_negotiations.jsonl`). Each turn has a CaSiNo strategy label. For each
+`(strategy × price-direction)` bucket, cluster real buyer messages and pick 3-5 templates per
+bucket. When the steerer overrides, slot the corrected price into a randomly-picked template
+from the matching bucket. Native-sounding, instant, free.
+
+---
+
+## 📌 PINNED: Logging convention
+
+Every train/eval run writes a structured directory to `runs/{timestamp}_{name}/`:
+
+- `config.json` — hyperparams, model id, dataset hash, git sha
+- `metrics.jsonl` — one line per step / epoch / episode
+- `summary.json` — final scores
+- `stdout.log` — captured stdout/stderr
+
+This applies to: SFT, GRPO, DPO, NLP extractor zero-shot eval, NLP extractor fine-tune,
+full env eval, ablations. **No exceptions.** Reproducibility, blog post material, and
+provenance for every claim in the README all depend on this.
+
+A small helper module `utils/run_logger.py` provides a `RunLogger` context manager so
+adding logging to a script is 3 lines.
+
+---
+
+## 📌 PINNED: "Who won" — symmetric scoring
+
+Current eval reports buyer surplus only. That's asymmetric — doesn't say who outplayed whom.
+
+Each episode has `seller_cost`, `seller_anchor`, `buyer_budget`, `agreed_price`. Compute:
+
+```
+zopa = buyer_budget - seller_cost
+buyer_share  = (buyer_budget - agreed_price) / zopa
+seller_share = (agreed_price - seller_cost) / zopa
+```
+
+Sum to 1.0 on a deal. `buyer_share = 0.5` is fair split; `0.7` means buyer captured 70% of
+the bargaining surplus.
+
+### Outcome classification
+
+| condition | label |
+|---|---|
+| `buyer_share > 0.6` | buyer win |
+| `seller_share > 0.6` | seller win |
+| `0.4 ≤ buyer_share ≤ 0.6` | tie (fair split) |
+| no deal AND `zopa > 0` | mutual loss (deal was possible, both fail) |
+| no deal AND `zopa ≤ 0` | rational walk (no deal possible, neither lost) |
+
+`mutual_loss_rate` is the alignment metric — **low is good**, it measures how often the
+agent fails to close a winnable deal.
+
+### Per-policy report card
+- mean `buyer_share` (headline)
+- win rate (% episodes where buyer_share > 0.6)
+- mutual-loss rate
+- mean rounds
+- bootstrap 95% CI on each (n ≥ 200 episodes)
+
+Implement in `eval/scoring.py` and retrofit existing `eval/out/*.jsonl` results.
+
+---
+
+## 📌 PINNED: Compute strategy (HF $30 credits)
+
+A10G with 4-bit quant fits 30-32B param models. Default mental model shifts from "what fits in
+my 7GB local VRAM" to "what fits in 24GB on HF compute, served via inference endpoint."
+
+- **Buyer (bestdealbot v2):** Qwen3-32B or Qwen2.5-32B, 4-bit, LoRA fine-tuned. Served via HF
+  inference endpoint. Demo tunnels to it.
+- **Seller (gemma_seller):** Gemma-2-9B-it or Qwen2.5-14B, prompted, no fine-tune. Served same way.
+- **NLP extractor:** ministral-3:3b stays local. Latency-sensitive, runs alongside everything
+  else without competing for the big-model GPU.
+
+Local 7GB VRAM is no longer a hard constraint. The demo path is **HF inference endpoint →
+cloudflared tunnel from laptop running just ministral + the FastAPI orchestration layer**.
+
+If HF endpoint cost is a concern post-credits: the smaller local models still work. Story
+becomes "we trained on A10G, here are the numbers; demo uses a smaller model that fits a
+laptop, here's the gap." Both stories are honest.
+
+---
+
+## 📌 PINNED: Team split
+
+**Solo (paymybills):** site (BazaarBATNA UI overhaul + MolBhav landing) + bestdealbot training +
+NLP extractor + integration.
+
+**Teammate(s):** Gemma seller + listings integration + seller-quality eval.
+
+The seller is independent: clean interface, no overlap with model code or UI work. Handoff
+package lives at [`docs/SELLER_HANDOFF.md`](docs/SELLER_HANDOFF.md) — interface contract,
+dataset paths, role-brief template, acceptance criteria, eval requirements.
+
+---
+
 ## Pillar 1 — NLP Tell Extractor + Condition/Depreciation Block
 
 **The problem:** `verbal_urgency=0.6` is a float synthesized from hidden seller state.
