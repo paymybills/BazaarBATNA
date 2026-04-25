@@ -135,8 +135,16 @@ def run_episode(
     task_name: str,
     seed: int,
     max_turns: int = 15,
+    enable_nlp: bool = False,
 ) -> EpisodeResult:
     env = BazaarGymEnv(task_name=task_name, seed=seed)
+    # Toggle the NLP extractor for the ablation: default off matches v1 eval,
+    # on routes seller messages through ministral for verbal-tell extraction.
+    if enable_nlp:
+        try:
+            env.env.task.enable_nlp = True  # type: ignore[attr-defined]
+        except Exception:
+            pass
     obs, _ = env.reset()
 
     transcript: list[dict] = [{"round": 0, "actor": "seller", "message": obs.get("message", "")}]
@@ -240,14 +248,22 @@ def main():
                    default=["single_deal", "asymmetric_pressure", "amazon_realistic"])
     p.add_argument("--seed_base", type=int, default=1000)
     p.add_argument("--out_dir", default="eval/out")
+    p.add_argument("--enable_nlp", type=int, default=0,
+                   help="1 = route seller messages through ministral NLP extractor; 0 = rule-based tells (default, matches v1 eval)")
+    p.add_argument("--tag", default="",
+                   help="Suffix appended to the output filename, e.g. 'tells_on'")
     args = p.parse_args()
 
     name, policy = resolve_policy(args)
-    print(f"Running eval: policy={name}, tasks={args.tasks}, n={args.n}")
+    enable_nlp = bool(args.enable_nlp)
+    print(f"Running eval: policy={name}, tasks={args.tasks}, n={args.n}, enable_nlp={enable_nlp}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_path = out_dir / f"results_{name.replace(':', '_').replace('/', '_')}.jsonl"
+    safe_name = name.replace(':', '_').replace('/', '_')
+    if args.tag:
+        safe_name = f"{safe_name}_{args.tag}"
+    jsonl_path = out_dir / f"results_{safe_name}.jsonl"
 
     rows: list[EpisodeResult] = []
     t0 = time.time()
@@ -259,7 +275,7 @@ def main():
             print(f"  task={task}  ", end="", flush=True)
             for i in range(args.n):
                 seed = args.seed_base + i
-                r = run_episode(policy, name, task, seed)
+                r = run_episode(policy, name, task, seed, enable_nlp=enable_nlp)
                 rows.append(r)
                 f.write(json.dumps(r.__dict__, default=str) + "\n")
                 if (i + 1) % 10 == 0:
@@ -273,9 +289,11 @@ def main():
         "n_per_task": args.n,
         "tasks": args.tasks,
         "elapsed_s": round(elapsed, 1),
+        "enable_nlp": enable_nlp,
+        "tag": args.tag or None,
     }
 
-    summary_path = out_dir / f"summary_{name.replace(':', '_').replace('/', '_')}.json"
+    summary_path = out_dir / f"summary_{safe_name}.json"
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
 

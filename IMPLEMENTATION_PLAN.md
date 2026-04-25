@@ -196,6 +196,90 @@ gap), so we either stay small and iterate or go big and commit. We do both.
 
 ---
 
+## 📌 PINNED: Tells ablation — does the observation channel actually do work?
+
+**Locked for venue.** This is the cleanest "what did our novel feature buy you"
+claim. Code judges will reach for this question; we should answer it before
+they ask.
+
+### What
+
+Run the same buyer (`bestdealbot-v2`) against the same seller (rule-based, all
+4 personalities) on the same 50 episodes — once with `enable_nlp=True`, once
+with `enable_nlp=False`. Report the delta on `buyer_share`, `mutual_loss_rate`,
+and `mean_rounds`.
+
+The `enable_nlp` flag already gates the NLP extractor in `bazaarbot_env`
+(commit history shows it added when we wired ministral). When False, the
+buyer falls back to rule-based tells synthesis (the v0 path) — same agent,
+same env, just blindfolded on verbal signals.
+
+### Expected outcome (hypothesis)
+
+- `buyer_share` drops most on **`read_the_tells`** task (where deception cues
+  matter) — possibly from 0.418 → ~0.30
+- `mutual_loss_rate` *might* go up — without deception detection, the agent
+  matches fake-urgency prices more often, then walks when ZOPA collapses
+- `amazon_realistic` and `career_10` should be roughly unaffected (those tasks
+  reward price discipline, not perception)
+
+If the hypothesis holds, the headline is:
+*"Tells channel adds ~10% buyer surplus on tells-heavy tasks; the env's novel
+observation channel is doing real work."*
+
+If it doesn't hold (numbers identical with/without tells) — that's *also* publishable,
+and we drop the "tells matter" claim from the venue narrative honestly.
+
+### Firing
+
+```bash
+# Two eval runs, same model, same seeds, different env config:
+PYTHONPATH=. python eval/eval_harness.py --policy ollama --model bestdealbot \
+    --tasks amazon_realistic read_the_tells career_10 --n 50 \
+    --enable_nlp 1 --out eval/out/results_tells_on.jsonl
+
+PYTHONPATH=. python eval/eval_harness.py --policy ollama --model bestdealbot \
+    --tasks amazon_realistic read_the_tells career_10 --n 50 \
+    --enable_nlp 0 --out eval/out/results_tells_off.jsonl
+
+PYTHONPATH=. python eval/scoring.py  # produces the ablation table
+```
+
+Wall time: ~30-40 min total on local Ollama (2 × 60 episodes). $0 if local,
+~$1 if HF Jobs.
+
+### Eval harness work needed
+
+Quick check: does `eval/eval_harness.py` already accept `--enable_nlp`?
+If not, ~15 min to thread it through. Pin to verify tomorrow morning.
+
+---
+
+## 📌 PINNED: Locked decisions for venue (tonight's call)
+
+| Decision | Choice |
+|---|---|
+| **Run DPO tomorrow** | ✅ Yes — pipeline scaffolded at `08e7c4d`, ~$2 to fire |
+| **Reputation polish** | Lean light — README section + per-episode trajectory plot, ~30min. Skip prompt injection. |
+| **Tells ablation** | ✅ Yes — see pin above |
+| **Cross-product eval** | ✅ Yes — Sauda × Gemma seller, n=50 |
+| **Vision / multimodal buyer** | ❌ Future work |
+| **Live cloudflared tunnel** | Optional, low priority — judges read code |
+
+### Tomorrow's order of operations (locked)
+
+1. **8-9am** — Verify v2 buyer + seller landed cleanly overnight, smoke-test `/sell`
+2. **9-10am** — Cross-product eval (Sauda v2 × Gemma seller × 50 ep)
+3. **10-11am** — Tells ablation (with/without `enable_nlp`)
+4. **11-12pm** — Build DPO pairs locally + fire DPO Colab notebook
+5. **12-1pm** — Reputation polish: career_10 trajectory data + README section
+6. **1-2pm** — README final pass: 4 new tables (symmetric scoring, cross-product,
+   ablation, career trajectory) + 3 sample transcripts (one per persona)
+7. **2-3pm** — Demo dry-run, fix any UI/server bugs
+8. **3-5pm** — Buffer for things that broke, final commit, done
+
+---
+
 ## 📌 PINNED: DPO pipeline (scaffolded, ready to fire)
 
 Third training stage on top of v2 SFT+GRPO. Files committed at `08e7c4d`:
