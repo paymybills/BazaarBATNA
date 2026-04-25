@@ -141,6 +141,7 @@ def main() -> None:
             attempts += 1
             listing = rng.choice(listings)
             brief = make_role_brief(listing, rng)
+            print(f"  attempt {attempts}: persona={brief['persona']} listing={listing.get('title','?')[:40]}", flush=True)
 
             try:
                 # Two rollouts with same listing/brief, different rng seeds → behaviour diverges
@@ -153,11 +154,12 @@ def main() -> None:
                     None, listing, brief, args.seller_model, args.max_rounds, rng_b, 0.9
                 )
             except Exception as e:
-                print(f"  ! pair {i} rollout failed: {e}")
+                print(f"  ! attempt {attempts} rollout failed: {e}", flush=True)
                 continue
 
             verdict = compare_rollouts(listing, brief, rollout_a, rollout_b)
             if verdict["winner"] == "tie":
+                print(f"    tie ({verdict['reason'][:80]}) — skipping", flush=True)
                 continue
 
             chosen = rollout_a if verdict["winner"] == "a" else rollout_b
@@ -178,7 +180,7 @@ def main() -> None:
                 "persona": brief["persona"],
                 "reason": verdict["reason"],
             })
-            print(f"  [{i+1}/{args.n}] {brief['persona']:>10} → winner={verdict['winner']}")
+            print(f"  [{i+1}/{args.n}] {brief['persona']:>10} → winner={verdict['winner']}", flush=True)
             i += 1
 
         with open(out_path, "w") as f:
