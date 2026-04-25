@@ -101,7 +101,7 @@ print("Copied to data/dpo_pairs.jsonl")
 PYEOF
 else
     echo "Building $N_PAIRS DPO pairs (judge: Claude-as-judge if ANTHROPIC_API_KEY set, else heuristic)"
-    PYTHONPATH=. python eval/build_dpo_pairs.py \
+    PYTHONPATH=. python -u eval/build_dpo_pairs.py \
         --buyer-model "$BUYER_MODEL" \
         --seller-model "$SELLER_MODEL" \
         --n "$N_PAIRS" \
@@ -130,7 +130,7 @@ PAIRS_PATH=data/dpo_pairs.jsonl \
 SFT_HF_REPO="$SFT_HF_REPO" \
 REPO_ID="$REPO_ID" \
 BETA="$BETA" LR="$LR" EPOCHS="$EPOCHS" \
-PYTHONPATH=. python training/v2/dpo.py
+PYTHONPATH=. python -u training/v2/dpo.py
 
 LATEST_RUN=$(ls -1dt runs/*_dpo_8b | head -1)
 echo "Uploading $LATEST_RUN to $RESULTS_REPO ..."

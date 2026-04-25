@@ -114,7 +114,7 @@ echo "$LADDER" | while IFS='|' read -r LABEL BASE ADAPTER STEER; do
         ADAPTER_FLAG="--hf_adapter $ADAPTER"
     fi
 
-    PYTHONPATH=. python eval/eval_harness.py \
+    PYTHONPATH=. python -u eval/eval_harness.py \
         --policy hf \
         --hf_base "$BASE" \
         $ADAPTER_FLAG \
