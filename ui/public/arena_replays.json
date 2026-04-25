@@ -1,0 +1,261 @@
+[
+  {
+    "id": "iphone-rush",
+    "title": "iPhone 13 (128GB)",
+    "subtitle": "Listed at \u20b940,000 \u00b7 4 buyers, 1 unit",
+    "listing_price": 40000,
+    "seller_reservation": 32000,
+    "rounds": [
+      {
+        "round": 1,
+        "actions": [
+          {
+            "buyer": "rule_aggressive",
+            "label": "Aggressive",
+            "action": "offer",
+            "price": 22000,
+            "message": "\u20b922000 final, ek dum se le lo"
+          },
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 26000,
+            "message": "\u20b926000 fair lagta hai"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "offer",
+            "price": 28000,
+            "message": "I can do 28000."
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 24500,
+            "message": "yaar 24500 max de sakta hu"
+          }
+        ],
+        "seller_message": "Lowest I'll go is 36000."
+      },
+      {
+        "round": 2,
+        "actions": [
+          {
+            "buyer": "rule_aggressive",
+            "label": "Aggressive",
+            "action": "walk",
+            "price": null,
+            "message": "nahi yaar, bye"
+          },
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 30000,
+            "message": "thoda kam karo, 30000"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "accept",
+            "price": 36000,
+            "message": "okay deal"
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 28000,
+            "message": "market mein 28000 mein mil raha hai"
+          }
+        ],
+        "seller_message": "I sold to the Llama buyer at 36000."
+      }
+    ],
+    "outcome": {
+      "winner": "llama32_baseline",
+      "price": 36000,
+      "comment": "Llama capitulated fast. Bestdealbot was holding for a better price \u2014 would have won at 31000 if seller had patience."
+    }
+  },
+  {
+    "id": "scooter-shootout",
+    "title": "Honda Activa 2019",
+    "subtitle": "Listed at \u20b965,000 \u00b7 3 buyers, 1 unit",
+    "listing_price": 65000,
+    "seller_reservation": 52000,
+    "rounds": [
+      {
+        "round": 1,
+        "actions": [
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 42000,
+            "message": "\u20b942k mera offer"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "offer",
+            "price": 50000,
+            "message": "50000 chalega?"
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 44000,
+            "message": "yaar 44000 mein de do na bhai"
+          }
+        ],
+        "seller_message": "Last price 58000, no lower."
+      },
+      {
+        "round": 2,
+        "actions": [
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 50000,
+            "message": "50000 final"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "offer",
+            "price": 55000,
+            "message": "55000?"
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 49000,
+            "message": "49000 max, condition dekh ke"
+          }
+        ],
+        "seller_message": "I'll do 55000 if you're serious."
+      },
+      {
+        "round": 3,
+        "actions": [
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "walk",
+            "price": null,
+            "message": "thoda zyada hai, dekhte hain phir"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "accept",
+            "price": 55000,
+            "message": "okay 55000 deal"
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 52500,
+            "message": "52500 last from my side"
+          }
+        ],
+        "seller_message": "Sold to Llama at 55000."
+      }
+    ],
+    "outcome": {
+      "winner": "llama32_baseline",
+      "price": 55000,
+      "comment": "Llama paid \u20b92500 above seller reservation. Bestdealbot was within \u20b9500 of reservation \u2014 seller would have closed if it had patience for one more round."
+    }
+  },
+  {
+    "id": "table-bidding",
+    "title": "Mid-century dining table",
+    "subtitle": "Listed at $399 \u00b7 4 buyers",
+    "listing_price": 399,
+    "seller_reservation": 310,
+    "rounds": [
+      {
+        "round": 1,
+        "actions": [
+          {
+            "buyer": "rule_aggressive",
+            "label": "Aggressive",
+            "action": "offer",
+            "price": 200,
+            "message": "$200 take it or leave it"
+          },
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 250,
+            "message": "How about 250?"
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "offer",
+            "price": 320,
+            "message": "I can do 320."
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 280,
+            "message": "280 fair, condition se match karta hai"
+          }
+        ],
+        "seller_message": "Best I can do is 360."
+      },
+      {
+        "round": 2,
+        "actions": [
+          {
+            "buyer": "rule_aggressive",
+            "label": "Aggressive",
+            "action": "walk",
+            "price": null,
+            "message": "pass."
+          },
+          {
+            "buyer": "rule_smart",
+            "label": "Smart heuristic",
+            "action": "offer",
+            "price": 310,
+            "message": "310, last one."
+          },
+          {
+            "buyer": "llama32_baseline",
+            "label": "Llama-3.2-3B",
+            "action": "accept",
+            "price": 360,
+            "message": "deal at 360."
+          },
+          {
+            "buyer": "bestdealbot",
+            "label": "Bestdealbot",
+            "action": "offer",
+            "price": 320,
+            "message": "320 mein deal kar lete hain"
+          }
+        ],
+        "seller_message": "Sold to Llama at 360."
+      }
+    ],
+    "outcome": {
+      "winner": "llama32_baseline",
+      "price": 360,
+      "comment": "Pattern: Llama is the fastest closer but pays a premium. Bestdealbot consistently offers near reservation but loses on patience when sellers have multiple bidders."
+    }
+  }
+]

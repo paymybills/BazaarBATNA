@@ -1,329 +1,312 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { apiPost, apiGet } from "../lib/api";
-import { Users, Info, ArrowRight, Zap, Target } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Play, Pause, ChevronRight, ChevronLeft, RotateCcw, Trophy } from "lucide-react";
 
-interface ArenaInfo {
-  arena_id: string;
-  num_buyers: number;
+interface BuyerAction {
+  buyer: string;
+  label: string;
+  action: "offer" | "accept" | "walk";
+  price: number | null;
+  message: string;
 }
 
-interface BuyerObs {
-  buyer_id: string;
-  negotiation: {
-    current_round: number;
-    max_rounds: number;
-    opponent_last_offer: number | null;
-    own_last_offer: number | null;
-    own_private_budget: number;
-    seller_asking_price: number;
-    seller_personality: string;
-    rounds_remaining: number;
-    done: boolean;
-    deal_outcome: string | null;
-    message: string;
-    tells: Record<string, unknown> | null;
+interface ArenaRound {
+  round: number;
+  actions: BuyerAction[];
+  seller_message: string;
+}
+
+interface ArenaScenario {
+  id: string;
+  title: string;
+  subtitle: string;
+  listing_price: number;
+  seller_reservation: number;
+  rounds: ArenaRound[];
+  outcome: {
+    winner: string;
+    price: number;
+    comment: string;
   };
-  other_buyers_visible: Array<{
-    buyer_id: string;
-    name: string;
-    status: string;
-    rounds_active?: number;
-  }>;
-  coalition_signals: Array<{
-    round: number;
-    buyer_id: string;
-    signal: string;
-  }>;
-  seller_attention: string;
 }
 
-interface ArenaState {
-  arena_id: string;
-  current_round: number;
-  max_rounds: number;
-  done: boolean;
-  winner: string | null;
-  deal_price: number | null;
-  buyer_states: Record<string, { offers: unknown[]; total_offers: number; last_price: number | null }>;
-}
+const BUYER_COLORS: Record<string, string> = {
+  rule_aggressive: "var(--bad)",
+  rule_smart: "var(--accent-2)",
+  llama32_baseline: "var(--warn)",
+  bestdealbot: "var(--accent)",
+};
 
 export default function ArenaPage() {
-  const [arena, setArena] = useState<ArenaInfo | null>(null);
-  const [numBuyers, setNumBuyers] = useState(3);
-  const [buyers, setBuyers] = useState<string[]>([]);
-  const [observations, setObservations] = useState<Record<string, BuyerObs>>({});
-  const [arenaState, setArenaState] = useState<ArenaState | null>(null);
-  const [offers, setOffers] = useState<Record<string, number>>({});
-  const [signals, setSignals] = useState<Record<string, string>>({});
-  const [log, setLog] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [replays, setReplays] = useState<ArenaScenario[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [round, setRound] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const createArena = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiPost<ArenaInfo>("/arena/create", {
-        task: "marketplace_arena",
-        seed: Math.floor(Math.random() * 10000),
-        num_buyers: numBuyers,
-      });
-      setArena(res);
-      setLog([`Arena Created: ${res.arena_id}`]);
+  useEffect(() => {
+    fetch("/arena_replays.json")
+      .then((r) => r.json())
+      .then(setReplays)
+      .catch(() => {});
+  }, []);
 
-      const buyerIds: string[] = [];
-      const names = ["Alice", "Bob", "Carol", "Dave", "Eve"];
-      for (let i = 0; i < numBuyers; i++) {
-        const bid = `buyer_${i}`;
-        await apiPost(`/arena/${res.arena_id}/join`, {
-          buyer_id: bid,
-          name: names[i] || `Buyer ${i}`,
-          is_human: i === 0,
-        });
-        buyerIds.push(bid);
-      }
-      setBuyers(buyerIds);
+  const scenario = replays[activeIdx];
+  const totalRounds = scenario?.rounds.length ?? 0;
 
-      const obs = await apiPost<Record<string, BuyerObs>>(`/arena/${res.arena_id}/reset`, {});
-      setObservations(obs);
-
-      const initOffers: Record<string, number> = {};
-      for (const bid of buyerIds) {
-        initOffers[bid] = Math.round((obs[bid]?.negotiation?.seller_asking_price ?? 60) * 0.5);
-      }
-      setOffers(initOffers);
-      setLog((l) => [...l, "Session Active. Sequential bidding protocols engaged."]);
-    } catch (e) {
-      setLog((l) => [...l, `Protocol Error: ${e}`]);
-    }
-    setLoading(false);
-  }, [numBuyers]);
-
-  const submitRound = useCallback(async () => {
-    if (!arena) return;
-    setLoading(true);
-    try {
-      const actions: Record<string, Record<string, unknown>> = {};
-      for (const bid of buyers) {
-        const isHuman = bid === "buyer_0";
-        if (isHuman) {
-          actions[bid] = { action: "offer", price: offers[bid], signal: signals[bid] || null };
-        } else {
-          const obs = observations[bid];
-          if (!obs) continue;
-          const ask = obs.negotiation.opponent_last_offer ?? obs.negotiation.seller_asking_price;
-          const budget = obs.negotiation.own_private_budget;
-          const round = obs.negotiation.current_round;
-          const aiOffer = Math.min(budget * 0.7, ask * (0.5 + round * 0.06) + (Math.random() * 5 - 2.5));
-          actions[bid] = { action: "offer", price: Math.round(aiOffer) };
+  useEffect(() => {
+    if (!playing) return;
+    timerRef.current = setInterval(() => {
+      setRound((r) => {
+        if (r >= totalRounds - 1) {
+          setPlaying(false);
+          return r;
         }
-      }
+        return r + 1;
+      });
+    }, 1800);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [playing, totalRounds]);
 
-      const result = await apiPost<Record<string, BuyerObs>>(`/arena/${arena.arena_id}/step`, { actions });
-      setObservations(result);
+  useEffect(() => {
+    setRound(0);
+    setPlaying(false);
+  }, [activeIdx]);
 
-      const state = await apiGet<ArenaState>(`/arena/${arena.arena_id}/state`);
-      setArenaState(state);
+  const visibleRounds = scenario?.rounds.slice(0, round + 1) ?? [];
+  const isFinal = scenario && round >= totalRounds - 1;
 
-      const msgs: string[] = [];
-      for (const [bid, obs] of Object.entries(result)) {
-        const name = bid === "buyer_0" ? "USER" : bid.toUpperCase();
-        msgs.push(`${name} // ${obs.negotiation.message}`);
-      }
-      setLog((l) => [...l, `[T=${state.current_round}]`, ...msgs]);
-
-      if (state.done) {
-        const winner = state.winner === "buyer_0" ? "USER" : state.winner?.toUpperCase();
-        setLog((l) => [...l, state.winner ? `COMPLETED: SOLD TO ${winner} @ ₹${state.deal_price?.toFixed(0)}` : "TERMINATED: NO DEAL"]);
-      }
-    } catch (e) {
-      setLog((l) => [...l, `Runtime Error: ${e}`]);
-    }
-    setLoading(false);
-  }, [arena, buyers, offers, signals, observations]);
-
-  const myObs = observations["buyer_0"];
-  const isDone = arenaState?.done ?? false;
+  // Aggregate per-buyer running price for the chart-strip
+  const buyerLines = useMemo(() => {
+    if (!scenario) return [] as { id: string; label: string; color: string; prices: (number | null)[] }[];
+    const buyerIds = Array.from(
+      new Set(scenario.rounds.flatMap((r) => r.actions.map((a) => a.buyer)))
+    );
+    return buyerIds.map((bid) => {
+      const sample = scenario.rounds[0].actions.find((a) => a.buyer === bid);
+      const label = sample?.label ?? bid;
+      return {
+        id: bid,
+        label,
+        color: BUYER_COLORS[bid] ?? "var(--foreground)",
+        prices: scenario.rounds.map(
+          (r) => r.actions.find((a) => a.buyer === bid)?.price ?? null
+        ),
+      };
+    });
+  }, [scenario]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
-      <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-12 border-b border-border pb-8">
-        <div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic">Arena.v1</h1>
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
-            Multi-Agent Collision Environment // Marketplace Metrics
-          </p>
-        </div>
+    <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="mb-10">
+        <h1 className="text-h1 mb-2">Arena</h1>
+        <p className="text-meta">
+          Pre-computed multi-buyer rollouts. Each agent competes for the same listing.
+        </p>
       </div>
 
-      {!arena ? (
-        <div className="max-w-md mx-auto">
-          <div className="p-12 border border-border bg-surface">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] mb-12 border-b border-border pb-2">Deployment</h2>
-            <div className="space-y-12">
-               <div className="space-y-6">
-                <label className="block text-[10px] uppercase tracking-[0.15em] text-foreground/40 font-black">Node Count</label>
-                <input
-                  type="range"
-                  min={2}
-                  max={5}
-                  value={numBuyers}
-                  onChange={(e) => setNumBuyers(Number(e.target.value))}
-                  className="w-full accent-foreground grayscale"
-                />
-                <div className="text-center text-[10px] uppercase tracking-widest font-black opacity-30 italic">{numBuyers} Active Buyers</div>
-              </div>
-
-              <div className="p-4 border border-border text-[10px] uppercase tracking-[0.1em] text-foreground/40 leading-relaxed font-light">
-                Simulation replicates Facebook Marketplace dynamics. User occupies Node_0. Counter-agents utilize stochastic Concession strategies.
-              </div>
-
-              <button
-                onClick={createArena}
-                disabled={loading}
-                className="w-full px-8 py-4 bg-foreground text-background font-black text-xs uppercase tracking-[0.3em] hover:invert transition-all"
-              >
-                {loading ? "Initializing..." : "Mount Environment"}
-              </button>
+      {/* Scenario picker */}
+      <div className="rounded-xl border border-border bg-surface p-2 mb-6 flex flex-wrap gap-2">
+        {replays.map((r, i) => (
+          <button
+            key={r.id}
+            onClick={() => setActiveIdx(i)}
+            className={`flex-1 min-w-[180px] px-4 py-3 rounded-lg text-left transition-colors ${
+              i === activeIdx
+                ? "bg-surface-2 border border-border-2"
+                : "border border-transparent hover:bg-surface-2/50"
+            }`}
+          >
+            <div className="text-foreground text-sm font-medium leading-tight">
+              {r.title}
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-3 space-y-8">
-            {/* Monitor */}
-            <div className="grid grid-cols-4 gap-px bg-border border border-border">
-              {[
-                { label: "Temporal", value: `${arenaState?.current_round ?? 0} / ${arenaState?.max_rounds ?? 12}` },
-                { label: "Active Bid", value: myObs?.negotiation.opponent_last_offer?.toFixed(0) ?? "—" },
-                { label: "Allocation", value: `₹${myObs?.negotiation.own_private_budget ?? 100}` },
-                { label: "Priority", value: myObs?.seller_attention === "buyer_0" ? "HIGH" : "LOW" },
-              ].map((m) => (
-                <div key={m.label} className="bg-background p-4 text-center">
-                  <div className="text-[9px] uppercase tracking-widest text-foreground/30 mb-2 font-black">{m.label}</div>
-                  <div className="text-xs font-mono font-black">{m.value}</div>
-                </div>
-              ))}
+            <div className="text-meta mt-0.5">{r.subtitle}</div>
+          </button>
+        ))}
+      </div>
+
+      {scenario && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          <div className="space-y-5">
+            {/* Listing strip */}
+            <div className="rounded-xl border border-border bg-surface px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <div className="text-eyebrow">listing</div>
+                <div className="text-foreground font-medium text-sm">{scenario.title}</div>
+              </div>
+              <div className="flex items-center gap-5 text-sm font-mono tabular-nums">
+                <span className="text-fg3">res ${scenario.seller_reservation.toLocaleString()}</span>
+                <span className="text-fg2">listed ${scenario.listing_price.toLocaleString()}</span>
+              </div>
             </div>
 
-            {/* Nodes */}
-            <div className="p-8 border border-border bg-surface">
-              <h3 className="text-[10px] uppercase tracking-[0.2em] font-black mb-8 italic opacity-30">Network Nodes</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {myObs?.other_buyers_visible.map((b) => (
-                  <div
-                    key={b.buyer_id}
-                    className={`p-6 border transition-all ${
-                      myObs.seller_attention === b.buyer_id
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-background text-foreground/30"
-                    }`}
+            {/* Buyer table */}
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <div className="text-eyebrow">Buyers · round {round + 1} / {totalRounds}</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRound((r) => Math.max(0, r - 1))}
+                    className="p-1.5 rounded hover:bg-surface-2 transition-colors"
+                    aria-label="prev"
                   >
-                    <div className="font-black text-[10px] uppercase tracking-tighter mb-2 italic">
-                       {myObs.seller_attention === b.buyer_id && <Zap size={10} className="inline mr-2 fill-current" />}
-                       {b.name}
-                    </div>
-                    <div className="text-[8px] uppercase tracking-widest font-bold">
-                      {b.status} // {b.rounds_active ?? 0}T
-                    </div>
-                  </div>
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    onClick={() => setPlaying((p) => !p)}
+                    className="p-1.5 rounded hover:bg-surface-2 transition-colors"
+                    aria-label={playing ? "pause" : "play"}
+                  >
+                    {playing ? <Pause size={14} /> : <Play size={14} />}
+                  </button>
+                  <button
+                    onClick={() => setRound((r) => Math.min(totalRounds - 1, r + 1))}
+                    className="p-1.5 rounded hover:bg-surface-2 transition-colors"
+                    aria-label="next"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => { setRound(0); setPlaying(false); }}
+                    className="p-1.5 rounded hover:bg-surface-2 transition-colors"
+                    aria-label="reset"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="divide-y divide-border">
+                {scenario.rounds[round].actions.map((action) => (
+                  <BuyerRow
+                    key={action.buyer}
+                    action={action}
+                    color={BUYER_COLORS[action.buyer] ?? "var(--foreground)"}
+                  />
                 ))}
+              </div>
+
+              {/* Seller response */}
+              <div className="bg-surface-2/40 border-t border-border px-5 py-4">
+                <div className="text-eyebrow mb-2">Seller</div>
+                <div className="text-foreground text-sm italic">
+                  {scenario.rounds[round].seller_message}
+                </div>
               </div>
             </div>
 
-            {/* Interaction */}
-            {!isDone && (
-              <div className="p-8 border border-border bg-surface">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase tracking-[0.2em] font-black mb-6">Injected Proposal</label>
-                    <input
-                      type="range"
-                      min={1}
-                      max={myObs?.negotiation.own_private_budget ?? 100}
-                      value={offers["buyer_0"] ?? 30}
-                      onChange={(e) => setOffers({ ...offers, buyer_0: Number(e.target.value) })}
-                      className="w-full accent-foreground grayscale"
-                    />
-                    <div className="flex justify-between text-[10px] font-mono text-foreground/40 mt-4 font-bold">
-                      <span>MIN: ₹1</span>
-                      <span className="text-foreground font-black text-2xl">₹{offers["buyer_0"] ?? 30}</span>
-                      <span>CAP: {myObs?.negotiation.own_private_budget}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    <label className="block text-[10px] uppercase tracking-[0.2em] font-black mb-1">Signal Mode</label>
-                    <select
-                      value={signals["buyer_0"] || ""}
-                      onChange={(e) => setSignals({ ...signals, buyer_0: e.target.value })}
-                      className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none"
-                    >
-                      <option value="">Linear</option>
-                      <option value="cooperate">Cooperative</option>
-                      <option value="compete">Competitive</option>
-                      <option value="bluff">Deceptive</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col justify-end">
-                    <button
-                      onClick={submitRound}
-                      disabled={loading}
-                      className="w-full py-4 bg-foreground text-background font-black text-[10px] uppercase tracking-widest hover:invert transition-all"
-                    >
-                      Submit Sequential
-                    </button>
+            {/* Outcome reveal */}
+            {isFinal && (
+              <div className="rounded-xl border border-accent/30 bg-accent/5 p-6 animate-fade-up">
+                <div className="flex items-center gap-3 mb-4">
+                  <Trophy size={18} className="text-accent" />
+                  <div className="text-eyebrow" style={{ color: "var(--accent)" }}>
+                    Outcome
                   </div>
                 </div>
-              </div>
-            )}
-
-            {isDone && arenaState && (
-              <div className="p-12 border-2 border-foreground bg-foreground text-background text-center animate-fade-in font-sans">
-                <div className="text-[10px] uppercase tracking-[0.5em] font-bold mb-4 opacity-50">Transfer Protocol Finalized</div>
-                <div className="text-4xl font-black uppercase tracking-tighter mb-4 italic">
-                  {arenaState.winner === "buyer_0" ? "USER DECLARED WINNER" : `${arenaState.winner?.toUpperCase()} DECLARED WINNER`}
+                <div className="text-h2 mb-3">
+                  {labelForBuyer(scenario, scenario.outcome.winner)} won at $
+                  {scenario.outcome.price.toLocaleString()}
                 </div>
-                <div className="text-xl font-mono font-black italic opacity-60 mb-10 underline underline-offset-8">
-                  ₹{arenaState.deal_price?.toFixed(0)} Surrendered
-                </div>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-8 py-3 border-2 border-background font-black text-xs uppercase tracking-[0.3em] hover:bg-background hover:text-foreground transition-all"
-                >
-                  Restart Simulation
-                </button>
+                <p className="text-fg2 leading-relaxed text-sm">
+                  {scenario.outcome.comment}
+                </p>
               </div>
             )}
           </div>
 
-          {/* Monitoring */}
-          <div className="space-y-8">
-            <div className="border border-border bg-surface p-6 font-mono">
-               <div className="text-[10px] uppercase tracking-[0.2em] font-black italic mb-6 opacity-30">Network Buffer</div>
-               <div className="h-[500px] overflow-y-auto space-y-4 custom-scrollbar">
-                {log.map((msg, i) => (
-                  <div key={i} className={`text-[9px] leading-relaxed animate-fade-in ${msg.startsWith('[T=') ? 'text-foreground font-black border-t border-white/5 pt-3 mt-3' : 'text-foreground/40'}`}>
-                    {msg}
+          {/* Right column: per-buyer trace */}
+          <div className="space-y-5">
+            <div className="rounded-xl border border-border bg-surface p-5">
+              <div className="text-eyebrow mb-4">Per-buyer trace</div>
+              <div className="space-y-3">
+                {buyerLines.map((line) => (
+                  <div key={line.id}>
+                    <div className="flex items-center justify-between mb-1.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: line.color }}
+                        />
+                        <span className="text-foreground">{line.label}</span>
+                      </div>
+                      <span className="font-mono text-fg2 tabular-nums">
+                        {line.prices[round] !== null ? `$${line.prices[round]}` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {line.prices.map((p, i) => (
+                        <div
+                          key={i}
+                          className={`flex-1 h-1 rounded-full transition-colors ${
+                            i === round ? "" : "opacity-30"
+                          }`}
+                          style={{
+                            background: p === null ? "var(--fg4)" : line.color,
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
                 ))}
-               </div>
-            </div>
-            
-            {myObs?.coalition_signals && myObs.coalition_signals.length > 0 && (
-              <div className="border border-border bg-surface p-6">
-                <h3 className="text-[10px] uppercase tracking-[0.2em] font-black mb-4 italic opacity-30">Tactical Signals</h3>
-                <div className="space-y-2">
-                  {myObs.coalition_signals.map((s, i) => (
-                    <div key={i} className="text-[10px] uppercase tracking-widest font-black italic">
-                      <span className="opacity-30">{s.buyer_id} //</span> <span className="underline decoration-1">{s.signal}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
-            )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-5">
+              <div className="text-eyebrow mb-3">About this view</div>
+              <p className="text-fg2 text-sm leading-relaxed">
+                These transcripts are pre-computed snapshots showing how
+                different buyer policies behave under the same conditions. Live
+                multi-agent runs are out-of-scope for the venue (VRAM constraints) —
+                the offline simulation captures the same dynamics.
+              </p>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function BuyerRow({ action, color }: { action: BuyerAction; color: string }) {
+  const tone =
+    action.action === "accept"
+      ? "text-good"
+      : action.action === "walk"
+      ? "text-bad"
+      : "text-foreground";
+
+  return (
+    <div className="flex items-start gap-4 px-5 py-4">
+      <div
+        className="w-2 h-2 rounded-full mt-2 shrink-0"
+        style={{ background: color }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <div className="text-foreground text-sm font-medium">{action.label}</div>
+          <div className="flex items-center gap-3 text-sm font-mono tabular-nums">
+            <span className={`uppercase tracking-wider text-[11px] ${tone}`}>
+              {action.action}
+            </span>
+            {action.price !== null && (
+              <span className="text-foreground">${action.price.toLocaleString()}</span>
+            )}
+          </div>
+        </div>
+        <div className="text-fg2 text-sm italic leading-relaxed">{action.message}</div>
+      </div>
+    </div>
+  );
+}
+
+function labelForBuyer(scenario: ArenaScenario, buyerId: string): string {
+  for (const r of scenario.rounds) {
+    const found = r.actions.find((a) => a.buyer === buyerId);
+    if (found) return found.label;
+  }
+  return buyerId;
 }

@@ -5,7 +5,7 @@ import { apiPost, type TaskInfo, apiGet } from "../lib/api";
 import { NegotiationChart } from "../components/NegotiationChart";
 import { TellsDisplay } from "../components/TellsDisplay";
 import { ReplayControls } from "../components/ReplayControls";
-import { AlertCircle, Play, Info, Cpu, Database } from "lucide-react";
+import { AlertCircle, Loader2, Play } from "lucide-react";
 
 interface SimStep {
   round: number;
@@ -155,131 +155,104 @@ export default function SpectatePage() {
   const isLlm = strategy === "llm";
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
-      <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-12 border-b border-border pb-8">
-        <div>
-          <h1 className="text-4xl font-semibold tracking-tight mb-2">Spectate</h1>
-          <p className="text-eyebrow">
-            Watch a buyer policy negotiate against the env. Turn-by-turn.
-          </p>
-        </div>
+    <div className="max-w-6xl mx-auto px-6 py-12">
+      {/* Header */}
+      <div className="mb-10">
+        <h1 className="text-h1 mb-2">Spectate</h1>
+        <p className="text-meta">
+          Watch a buyer policy negotiate against the env. Turn-by-turn replay.
+        </p>
       </div>
 
-      <div className="p-8 border border-border bg-surface mb-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-end">
-          <div className="space-y-4">
-            <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Scenario.lib</label>
-            <select
-              value={selectedTask}
-              onChange={(e) => setSelectedTask(e.target.value)}
-              className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none transition-colors"
-            >
-              {Object.entries(tasks).map(([name, t]) => (
+      {/* Config */}
+      <div className="rounded-xl border border-border bg-surface p-6 mb-8">
+        <div className="grid md:grid-cols-4 gap-5 items-end">
+          <Field label="Scenario">
+            <Select value={selectedTask} onChange={setSelectedTask}>
+              {Object.keys(tasks).map((name) => (
                 <option key={name} value={name}>{name}</option>
               ))}
-            </select>
-          </div>
-          <div className="space-y-4">
-            <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Agent Policy</label>
-            <select
-              value={strategy}
-              onChange={(e) => setStrategy(e.target.value)}
-              className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none transition-colors"
-            >
-              <option value="smart">Smart (Rule)</option>
-              <option value="naive">Naive (Rule)</option>
-              <option value="aggressive">Aggressive (Rule)</option>
+            </Select>
+          </Field>
+          <Field label="Buyer policy">
+            <Select value={strategy} onChange={setStrategy}>
+              <option value="smart">Smart (rule)</option>
+              <option value="naive">Naive (rule)</option>
+              <option value="aggressive">Aggressive (rule)</option>
               <option value="llm">Neural (LLM)</option>
-            </select>
-          </div>
-          <div className="space-y-4">
-            <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Environment</label>
-            <select
-              value={personality}
-              onChange={(e) => setPersonality(e.target.value)}
-              className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none transition-colors"
-            >
-              <option value="">Default</option>
-              <option value="deceptive">Deceptive</option>
-              <option value="impatient">Impatient</option>
-              <option value="collaborative">Collaborative</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
+          <Field label="Seller personality">
+            <Select value={personality} onChange={setPersonality}>
+              <option value="">default</option>
+              <option value="deceptive">deceptive</option>
+              <option value="impatient">impatient</option>
+              <option value="collaborative">collaborative</option>
+            </Select>
+          </Field>
           <button
             onClick={runSimulation}
             disabled={loading}
-            className="w-full px-8 py-4 bg-foreground text-background font-black text-xs uppercase tracking-[0.3em] hover:invert transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-accent text-background px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity h-[42px]"
           >
-            {loading ? "Simulating..." : "Execute Trace"}
+            {loading ? (
+              <><Loader2 size={14} className="animate-spin" /> Running</>
+            ) : (
+              <><Play size={14} /> Run trace</>
+            )}
           </button>
         </div>
 
         {isLlm && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 pt-8 border-t border-border animate-fade-in">
-             <div className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Provider</label>
-              <select
-                value={llmProvider}
-                onChange={(e) => setLlmProvider(e.target.value)}
-                className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none"
-              >
-                <option value="" disabled>Select...</option>
+          <div className="grid md:grid-cols-3 gap-5 mt-5 pt-5 border-t border-border">
+            <Field label="LLM provider">
+              <Select value={llmProvider} onChange={setLlmProvider}>
+                <option value="">select…</option>
                 {Object.entries(providers).map(([key, p]) => (
                   <option key={key} value={key}>{p.name}</option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Model</label>
-              <select
-                value={llmModel}
-                onChange={(e) => setLlmModel(e.target.value)}
-                className="w-full bg-background border border-border px-4 py-3 text-[10px] uppercase tracking-tighter font-black focus:border-foreground outline-none"
-                disabled={!llmProvider}
-              >
-                <option value="" disabled>{llmProvider ? "Select..." : "Awaiting Provider"}</option>
+              </Select>
+            </Field>
+            <Field label="Model">
+              <Select value={llmModel} onChange={setLlmModel} disabled={!llmProvider}>
+                <option value="">{llmProvider ? "select…" : "pick a provider first"}</option>
                 {(providers[llmProvider]?.models ?? []).map((m) => (
                   <option key={m} value={m}>{m}</option>
                 ))}
-              </select>
-            </div>
-             <div className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-black">Auth Token</label>
+              </Select>
+            </Field>
+            <Field label="API key">
               <input
                 type="password"
                 value={llmApiKey}
                 onChange={(e) => setLlmApiKey(e.target.value)}
-                className="w-full bg-background border border-border px-4 py-3 text-[11px] uppercase tracking-widest font-black focus:border-foreground outline-none"
+                className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm font-mono focus:border-accent outline-none transition-colors h-[42px]"
               />
-            </div>
+            </Field>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="p-6 border-2 border-red-500 text-red-500 text-[11px] uppercase tracking-[0.2em] font-black mb-12 flex items-center gap-4">
-          <AlertCircle size={18} strokeWidth={3} /> {error}
+        <div className="rounded-xl border border-bad/40 bg-bad/10 px-5 py-4 mb-8 flex items-center gap-3">
+          <AlertCircle size={16} className="text-bad shrink-0" />
+          <span className="text-bad text-sm">{error}</span>
         </div>
       )}
 
       {result && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-3 space-y-8">
-            <div className="grid grid-cols-4 gap-px bg-border border border-border text-center">
-              {[
-                { label: "Policy", value: result.strategy.toUpperCase() },
-                { label: "Persona", value: result.personality.toUpperCase() || "DEFAULT" },
-                { label: "Aggregate Score", value: result.score.toFixed(4) },
-                { label: "Step Count", value: result.steps.length },
-              ].map((m) => (
-                <div key={m.label} className="bg-background p-6">
-                  <div className="text-[9px] uppercase tracking-widest text-foreground/30 mb-2 font-black">{m.label}</div>
-                  <div className="text-xs font-mono font-black">{m.value}</div>
-                </div>
-              ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          <div className="space-y-5">
+            {/* Stat strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Policy" value={result.strategy} />
+              <Stat label="Persona" value={result.personality || "default"} />
+              <Stat label="Score" value={result.score.toFixed(3)} mono />
+              <Stat label="Steps" value={result.steps.length.toString()} mono />
             </div>
 
-            <div className="border border-border p-8 bg-surface">
+            {/* Chart */}
+            <div className="rounded-xl border border-border bg-surface p-6">
               <NegotiationChart
                 history={chartHistory}
                 budget={100}
@@ -289,7 +262,8 @@ export default function SpectatePage() {
               />
             </div>
 
-            <div className="p-4 border border-border bg-background">
+            {/* Replay controls */}
+            <div className="rounded-xl border border-border bg-surface p-4">
               <ReplayControls
                 currentStep={replayStep}
                 totalSteps={result.steps.length - 1}
@@ -304,32 +278,41 @@ export default function SpectatePage() {
             </div>
           </div>
 
-          <div className="space-y-8">
-            <TellsDisplay
-              tells={currentTell}
-              personality={result.personality}
-            />
+          {/* Right column */}
+          <div className="space-y-5">
+            <TellsDisplay tells={currentTell} personality={result.personality} />
 
-            <div className="border border-border bg-surface overflow-hidden">
-               <div className="px-6 py-4 border-b border-border text-[9px] uppercase tracking-[0.3em] font-black opacity-30 italic">
-                Execution Buffer
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border">
+                <div className="text-eyebrow">Step log</div>
               </div>
-              <div ref={logRef} className="p-6 h-[500px] overflow-y-auto space-y-6 custom-scrollbar font-mono">
+              <div ref={logRef} className="p-4 h-[440px] overflow-y-auto space-y-2.5 font-mono">
                 {visibleSteps.map((step, i) => (
-                  <div key={i} className={`flex gap-6 animate-fade-in ${i === replayStep ? "bg-foreground text-background -mx-4 px-4 py-2" : "opacity-30"}`}>
-                    <span className="shrink-0 w-8 text-[8px] opacity-40 pt-1 italic">[{String(step.round).padStart(2, '0')}]</span>
-                    <div className="flex-1 space-y-2">
-                       <div className="text-[8px] uppercase tracking-widest font-black flex justify-between">
-                         <span>{step.actor} // {step.action}</span>
-                         {step.price != null && <span>₹{step.price.toFixed(0)}</span>}
-                       </div>
-                       {step.message && <div className="text-[10px] leading-relaxed tracking-tight">{step.message}</div>}
-                       {step.reasoning && (
-                        <div className="text-[9px] opacity-60 leading-normal border-t border-current pt-2 mt-2 font-sans italic opacity-40">
-                          LOGIC: {step.reasoning}
-                        </div>
-                       )}
+                  <div
+                    key={i}
+                    className={`rounded-lg px-3 py-2 transition-colors ${
+                      i === replayStep
+                        ? "bg-accent/10 border border-accent/30"
+                        : "opacity-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="text-fg3 tabular-nums">[{String(step.round).padStart(2, "0")}]</span>
+                      <span className="text-fg2">{step.actor} · {step.action}</span>
+                      {step.price != null && (
+                        <span className="text-foreground tabular-nums">₹{step.price.toFixed(0)}</span>
+                      )}
                     </div>
+                    {step.message && (
+                      <div className="text-xs text-foreground leading-relaxed font-sans">
+                        {step.message}
+                      </div>
+                    )}
+                    {step.reasoning && (
+                      <div className="text-[10px] text-fg3 italic leading-relaxed font-sans mt-1.5 pt-1.5 border-t border-border/50">
+                        {step.reasoning}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -337,6 +320,50 @@ export default function SpectatePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Reusable bits ─────────────────────────────────────── */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-eyebrow block mb-2">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Select({
+  value,
+  onChange,
+  disabled,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm focus:border-accent outline-none transition-colors h-[42px] disabled:opacity-40"
+    >
+      {children}
+    </select>
+  );
+}
+
+function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="text-eyebrow mb-1">{label}</div>
+      <div className={`text-base ${mono ? "font-mono tabular-nums" : "capitalize"} text-foreground`}>
+        {value}
+      </div>
     </div>
   );
 }

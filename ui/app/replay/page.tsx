@@ -11,33 +11,32 @@ import {
 import { NegotiationChart } from "../components/NegotiationChart";
 import { TellsDisplay } from "../components/TellsDisplay";
 import { ReplayControls } from "../components/ReplayControls";
-import { Play } from "lucide-react";
+import { Play, RotateCw } from "lucide-react";
 
-/* ── Curated highlights (Lib) ── */
 const highlights = [
   {
     id: "amazon-best",
-    title: "Amazon Realistic Trace",
-    task: "7,299 → 2,645",
+    title: "Amazon best haggle",
+    sub: "₹7,299 → ₹2,645",
     surplus: 0.974,
     rounds: 8,
-    badge: "97.4% Surplus",
+    badge: "97% surplus",
   },
   {
     id: "tells-deceptive",
-    title: "Deception Analysis",
-    task: "Bluff Verification",
+    title: "Read-the-tells win",
+    sub: "Deception flagged in turn 1",
     surplus: 0.483,
     rounds: 2,
-    badge: "Tell Extracted",
+    badge: "tell extracted",
   },
   {
     id: "career-grind",
-    title: "Long-form Negotiation",
-    task: "Stamina Play",
+    title: "Career-mode grind",
+    sub: "8 rounds, sustained pressure",
     surplus: 0.979,
     rounds: 8,
-    badge: "8-Round Grind",
+    badge: "long haggle",
   },
 ];
 
@@ -59,7 +58,7 @@ export default function ReplayPage() {
       setReplayStep(s.offer_history.length);
       setError(null);
     } catch {
-      setError("No active session detected. Simulation or Live session required.");
+      setError("No active session. Run a simulation or play a round first.");
     }
   }, []);
 
@@ -69,7 +68,10 @@ export default function ReplayPage() {
 
   const totalSteps = state?.offer_history.length ?? 0;
   const visibleHistory = state?.offer_history.slice(0, replayStep + 1) ?? [];
-  const currentRound = visibleHistory.length > 0 ? visibleHistory[visibleHistory.length - 1].round : 0;
+  const currentRound =
+    visibleHistory.length > 0
+      ? visibleHistory[visibleHistory.length - 1].round
+      : 0;
 
   const play = useCallback(() => {
     setIsPlaying(true);
@@ -106,7 +108,7 @@ export default function ReplayPage() {
       });
       setCfResult(res);
     } catch (e) {
-      setError(`Counterfactual failure: ${e}`);
+      setError(`Counterfactual failed: ${e}`);
     }
   };
 
@@ -115,44 +117,48 @@ export default function ReplayPage() {
   const dealPrice = dealEntry?.price ?? null;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-16 selection:bg-foreground selection:text-background font-sans">
-      <div className="flex flex-col md:flex-row items-baseline justify-between gap-6 mb-12 border-b border-border pb-8">
+    <div className="max-w-6xl mx-auto px-6 py-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row items-baseline justify-between gap-4 mb-10">
         <div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 italic">Analysis.v1</h1>
-          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-foreground/30">
-            Replay Buffer // Bayesian Divergence Tracking
+          <h1 className="text-h1 mb-2">Replay</h1>
+          <p className="text-meta">
+            Scrub through past episodes. Branch into counterfactuals.
           </p>
         </div>
         <button
           onClick={loadState}
-          className="px-6 py-2 border border-border text-[10px] uppercase tracking-widest font-black hover:bg-foreground hover:text-background transition-all"
+          className="inline-flex items-center gap-2 rounded-md border border-border-2 px-4 py-2 text-sm hover:border-foreground/40 transition-colors"
         >
-          Resync State
+          <RotateCw size={14} /> Refresh
         </button>
       </div>
 
       {/* Highlights */}
-      <section className="mb-20">
-        <h2 className="text-[11px] uppercase tracking-[0.4em] font-black italic mb-6 opacity-30 underline decoration-1 underline-offset-4">Highlights.lib</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <section className="mb-12">
+        <div className="text-eyebrow mb-5">Highlights</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {highlights.map((h) => (
             <Link
               key={h.id}
               href={`/replay/${h.id}`}
-              className="group border-t border-border pt-6 transition-all"
+              className="group rounded-xl border border-border bg-surface p-5 card-hover"
             >
-              <div className="mb-4">
-                <span className="text-[9px] uppercase tracking-widest border border-border px-2 py-0.5 text-foreground/40 group-hover:border-foreground group-hover:text-foreground transition-colors">
+              <div className="flex items-center justify-between mb-4">
+                <span
+                  className="text-eyebrow"
+                  style={{ color: "var(--accent)", opacity: 0.85 }}
+                >
                   {h.badge}
                 </span>
+                <span className="text-meta tabular-nums">{h.rounds} rds</span>
               </div>
-              <h3 className="font-black text-sm uppercase tracking-tight mb-1">{h.title}</h3>
-              <div className="flex gap-4 text-[10px] font-mono tracking-tighter text-foreground/30">
-                <span>{h.rounds} ROUNDS</span>
-                <span>{h.task}</span>
-              </div>
-              <div className="mt-6 flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-black opacity-0 group-hover:opacity-100 transition-all">
-                <Play size={10} strokeWidth={3} /> Watch replay
+              <h3 className="text-foreground text-base font-medium leading-snug mb-1.5">
+                {h.title}
+              </h3>
+              <div className="text-fg2 text-sm font-mono">{h.sub}</div>
+              <div className="flex items-center gap-2 mt-5 text-fg2 text-sm group-hover:text-foreground transition-colors">
+                <Play size={12} /> Watch
               </div>
             </Link>
           ))}
@@ -160,14 +166,14 @@ export default function ReplayPage() {
       </section>
 
       {!state && error && (
-        <div className="p-12 border border-border bg-surface text-center">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-foreground/40 mb-8">{error}</p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
+        <div className="rounded-xl border border-border bg-surface p-10 text-center">
+          <p className="text-fg2 text-sm mb-6">{error}</p>
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
             <Link
               href="/sell"
-              className="px-8 py-3 bg-foreground text-background font-black text-[10px] uppercase tracking-widest hover:invert transition-all"
+              className="inline-flex items-center justify-center rounded-md bg-accent text-background px-5 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              Start Session
+              Start a session
             </Link>
             <button
               onClick={async () => {
@@ -175,35 +181,28 @@ export default function ReplayPage() {
                 await apiPost("/simulate", { task: "single_deal", strategy: "smart", seed: 42 });
                 await loadState();
               }}
-              className="px-8 py-3 border border-border text-foreground font-black text-[10px] uppercase tracking-widest hover:bg-foreground hover:text-background transition-all"
+              className="inline-flex items-center justify-center rounded-md border border-border-2 px-5 py-2.5 text-sm hover:border-foreground/40 transition-colors"
             >
-              Inject Buffer
+              Run a quick demo simulation
             </button>
           </div>
         </div>
       )}
 
       {state && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-3 space-y-8">
-            {/* Metadata */}
-            <div className="grid grid-cols-5 gap-px bg-border border border-border">
-              {[
-                { label: "Protocol", value: state.task_name },
-                { label: "Personality", value: state.seller_personality },
-                { label: "Episode ID", value: state.episode },
-                { label: "Status", value: state.done ? "Closed" : "Active" },
-                { label: "Reward", value: state.cumulative_reward.toFixed(3) },
-              ].map((m) => (
-                <div key={m.label} className="bg-background p-4 text-center">
-                  <div className="text-[9px] uppercase tracking-widest text-foreground/30 mb-2">{m.label}</div>
-                  <div className="text-xs font-mono font-black">{m.value}</div>
-                </div>
-              ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          <div className="space-y-5">
+            {/* Metadata strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              <Stat label="Task" value={state.task_name} />
+              <Stat label="Persona" value={state.seller_personality || "default"} />
+              <Stat label="Episode" value={state.episode.toString()} mono />
+              <Stat label="Status" value={state.done ? "closed" : "active"} />
+              <Stat label="Reward" value={state.cumulative_reward.toFixed(3)} mono />
             </div>
 
-            {/* Visualizer */}
-            <div className="border border-border p-8 bg-surface">
+            {/* Chart */}
+            <div className="rounded-xl border border-border bg-surface p-6">
               <NegotiationChart
                 history={visibleHistory}
                 budget={state.buyer_budget}
@@ -213,7 +212,8 @@ export default function ReplayPage() {
               />
             </div>
 
-            <div className="p-4 border border-border bg-background">
+            {/* Replay controls */}
+            <div className="rounded-xl border border-border bg-surface p-4">
               <ReplayControls
                 currentStep={replayStep}
                 totalSteps={totalSteps - 1}
@@ -228,125 +228,161 @@ export default function ReplayPage() {
             </div>
 
             {/* Trace detail */}
-            <div className="border border-border bg-surface">
-              <h3 className="text-[10px] uppercase tracking-[0.2em] font-black p-6 border-b border-border">Sequential Trace</h3>
-              <div className="p-6 space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border">
+                <div className="text-eyebrow">Trace</div>
+              </div>
+              <div className="p-4 max-h-72 overflow-y-auto space-y-1.5 font-mono">
                 {visibleHistory.map((entry, i) => (
                   <div
                     key={i}
-                    className={`flex items-baseline gap-6 text-[11px] font-mono py-1 border-b border-white/5 last:border-0 ${
-                      i === replayStep ? "text-foreground font-black opacity-100" : "text-foreground/30"
+                    className={`flex items-center gap-4 text-xs py-1.5 px-2 rounded transition-colors ${
+                      i === replayStep
+                        ? "bg-accent/10 text-foreground"
+                        : "text-fg3"
                     }`}
                   >
-                    <span className="w-12 shrink-0 italic opacity-20">[{String(entry.round).padStart(2, '0')}]</span>
-                    <span className="w-20 shrink-0 uppercase tracking-widest font-black">{entry.actor}</span>
-                    <span className="flex-1 italic">{entry.action}</span>
+                    <span className="w-12 tabular-nums shrink-0">[{String(entry.round).padStart(2, "0")}]</span>
+                    <span className="w-16 shrink-0">{entry.actor}</span>
+                    <span className="flex-1">{entry.action}</span>
                     {entry.price != null && (
-                      <span className="w-20 text-right font-black">₹{entry.price.toFixed(0)}</span>
+                      <span className="w-20 text-right tabular-nums">₹{entry.price.toFixed(0)}</span>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* What-If */}
-            <div className="border border-border p-8 bg-surface">
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] mb-8 italic underline underline-offset-4">Divergence Analysis</h3>
-              <div className="flex flex-wrap items-end gap-8 mb-12">
+            {/* Counterfactual */}
+            <div className="rounded-xl border border-border bg-surface p-6">
+              <div className="flex items-baseline justify-between mb-5">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-widest text-foreground/40 mb-3 font-bold">Origin Round</label>
+                  <div className="text-eyebrow mb-1">Counterfactual</div>
+                  <h3 className="text-h2">What if?</h3>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                <div>
+                  <label className="text-eyebrow block mb-2">From round</label>
                   <input
                     type="number"
                     min={1}
                     max={state.current_round}
                     value={cfRound}
                     onChange={(e) => setCfRound(Number(e.target.value))}
-                    className="w-24 bg-background border border-border px-3 py-2 text-sm font-mono outline-none focus:border-foreground"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono focus:border-accent outline-none transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-widest text-foreground/40 mb-3 font-bold">Alternative Action</label>
+                  <label className="text-eyebrow block mb-2">Alt action</label>
                   <select
                     value={cfAction}
                     onChange={(e) => setCfAction(e.target.value)}
-                    className="bg-background border border-border px-3 py-2 text-sm font-mono outline-none focus:border-foreground uppercase tracking-tighter"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:border-accent outline-none transition-colors"
                   >
-                    <option value="offer">Offer</option>
-                    <option value="accept">Accept</option>
-                    <option value="walk">Walk</option>
+                    <option value="offer">offer</option>
+                    <option value="accept">accept</option>
+                    <option value="walk">walk</option>
                   </select>
                 </div>
                 {cfAction === "offer" && (
                   <div>
-                    <label className="block text-[10px] uppercase tracking-widest text-foreground/40 mb-3 font-bold">Synthetic Price</label>
+                    <label className="text-eyebrow block mb-2">Alt price</label>
                     <input
                       type="number"
                       value={cfPrice}
                       onChange={(e) => setCfPrice(Number(e.target.value))}
-                      className="w-24 bg-background border border-border px-3 py-2 text-sm font-mono outline-none focus:border-foreground"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono focus:border-accent outline-none transition-colors"
                     />
                   </div>
                 )}
-                <button
-                  onClick={runCounterfactual}
-                  className="px-8 py-2 bg-foreground text-background text-[11px] uppercase tracking-[0.2em] font-black hover:invert transition-all"
-                >
-                  Process Divergence
-                </button>
+                <div className="flex items-end">
+                  <button
+                    onClick={runCounterfactual}
+                    className="w-full rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Run
+                  </button>
+                </div>
               </div>
 
               {cfResult && (
-                <div className="border border-border overflow-hidden">
+                <div className="rounded-lg border border-border overflow-hidden">
                   <div className="grid grid-cols-1 md:grid-cols-2">
-                    <div className="p-6 border-r border-border bg-background">
-                      <div className="text-[9px] uppercase tracking-widest text-foreground/40 mb-4 font-bold">Baseline</div>
-                      <div className="text-xl font-black italic opacity-30 uppercase tracking-tighter mb-2">
-                        {cfResult.original_outcome} @ ₹{cfResult.original_price?.toFixed(0) ?? "-"}
+                    <div className="p-5 border-b md:border-b-0 md:border-r border-border bg-background">
+                      <div className="text-eyebrow mb-2">Original</div>
+                      <div className="text-xl font-mono mb-1">
+                        {cfResult.original_outcome} · ₹{cfResult.original_price?.toFixed(0) ?? "—"}
                       </div>
-                      <div className="text-[10px] font-mono text-foreground/20 italic">Score: {cfResult.original_score.toFixed(4)}</div>
+                      <div className="text-meta">score {cfResult.original_score.toFixed(3)}</div>
                     </div>
-                    <div className="p-6 bg-foreground text-background">
-                      <div className="text-[9px] uppercase tracking-widest opacity-60 mb-4 font-bold">Counterfactual</div>
-                      <div className="text-xl font-black italic uppercase tracking-tighter mb-2">
-                        {cfResult.counterfactual_outcome} @ ₹{cfResult.counterfactual_price?.toFixed(0) ?? "-"}
+                    <div className="p-5 bg-accent/10">
+                      <div className="text-eyebrow mb-2" style={{ color: "var(--accent)" }}>
+                        Counterfactual
                       </div>
-                      <div className="text-[10px] font-mono opacity-60 italic">Score: {cfResult.counterfactual_score.toFixed(4)}</div>
+                      <div className="text-xl font-mono mb-1">
+                        {cfResult.counterfactual_outcome} · ₹{cfResult.counterfactual_price?.toFixed(0) ?? "—"}
+                      </div>
+                      <div className="text-meta">score {cfResult.counterfactual_score.toFixed(3)}</div>
                     </div>
                   </div>
-                  <div className="px-6 py-4 bg-background border-t border-border text-[10px] text-foreground/30 uppercase tracking-widest text-center">
-                    Delta Detected: <span className="font-mono text-foreground">{(cfResult.counterfactual_score - cfResult.original_score).toFixed(4)}</span>
+                  <div className="px-5 py-3 bg-surface-2/40 border-t border-border text-xs text-fg3 text-center">
+                    Δ score{" "}
+                    <span className="font-mono text-foreground tabular-nums">
+                      {(cfResult.counterfactual_score - cfResult.original_score).toFixed(3)}
+                    </span>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-8">
+          {/* Right column */}
+          <div className="space-y-5">
             <TellsDisplay tells={currentTell} personality={state.seller_personality} />
             {state.tells_history.length > 0 && (
-              <div className="border border-border p-6 bg-surface">
-                <h3 className="text-[10px] uppercase tracking-[0.2em] font-black mb-6">Signal Variance</h3>
-                <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-surface p-5">
+                <div className="text-eyebrow mb-4">Signal variance</div>
+                <div className="space-y-2">
                   {state.tells_history.slice(0, replayStep).map((t, i) => (
-                    <div key={i} className="flex items-center gap-3 text-[9px] font-mono text-foreground/30">
-                      <span className="w-8 shrink-0">R{String(i + 1).padStart(2, '0')}</span>
-                      <div className="flex-1 h-[1px] bg-white/5 overflow-hidden">
-                        <div className="h-full bg-foreground opacity-20" style={{ width: `${t.verbal_urgency * 100}%` }} />
-                      </div>
-                      <div className="flex-1 h-[1px] bg-white/5 overflow-hidden">
-                        <div className="h-full bg-foreground opacity-40" style={{ width: `${t.verbal_deception_cue * 100}%` }} />
-                      </div>
-                      <div className="flex-1 h-[1px] bg-white/5 overflow-hidden">
-                        <div className="h-full bg-foreground opacity-80" style={{ width: `${t.fidget_level * 100}%` }} />
-                      </div>
+                    <div key={i} className="flex items-center gap-3 text-[10px] font-mono text-fg3">
+                      <span className="w-8 tabular-nums shrink-0">r{String(i + 1).padStart(2, "0")}</span>
+                      <Bar value={t.verbal_urgency} color="var(--accent)" />
+                      <Bar value={t.verbal_deception_cue} color="var(--bad)" />
+                      <Bar value={t.fidget_level} color="var(--accent-2)" />
                     </div>
                   ))}
+                </div>
+                <div className="mt-4 pt-3 border-t border-border flex justify-between text-[9px] text-fg3 font-mono uppercase tracking-wider">
+                  <span>urgency</span>
+                  <span>deception</span>
+                  <span>fidget</span>
                 </div>
               </div>
             )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="text-eyebrow mb-1">{label}</div>
+      <div className={`text-sm ${mono ? "font-mono tabular-nums" : "capitalize"} text-foreground`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Bar({ value, color }: { value: number; color: string }) {
+  const pct = Math.max(0, Math.min(1, value)) * 100;
+  return (
+    <div className="flex-1 h-1 bg-surface-2 rounded-full overflow-hidden">
+      <div className="h-full transition-all" style={{ width: `${pct}%`, background: color }} />
     </div>
   );
 }
