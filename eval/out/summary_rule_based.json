@@ -1,0 +1,36 @@
+{
+  "rule_based/amazon_realistic": {
+    "n": 20,
+    "mean_normalized_surplus": 0.3957,
+    "mean_task_score": 0.3957,
+    "deal_rate": 0.95,
+    "mean_rounds": 3.8,
+    "mean_surplus_on_deal": 0.4165
+  },
+  "rule_based/read_the_tells": {
+    "n": 20,
+    "mean_normalized_surplus": 0.0411,
+    "mean_task_score": 0.046,
+    "deal_rate": 0.05,
+    "mean_rounds": 2.0,
+    "mean_surplus_on_deal": 0.8224
+  },
+  "rule_based/career_10": {
+    "n": 20,
+    "mean_normalized_surplus": 0.8045,
+    "mean_task_score": 0.6869,
+    "deal_rate": 1.0,
+    "mean_rounds": 3.9,
+    "mean_surplus_on_deal": 0.8045
+  },
+  "_meta": {
+    "policy": "rule_based",
+    "n_per_task": 20,
+    "tasks": [
+      "amazon_realistic",
+      "read_the_tells",
+      "career_10"
+    ],
+    "elapsed_s": 0.4
+  }
+}

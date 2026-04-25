@@ -23,22 +23,65 @@ from .models import (
 from .seller import SellerPersonality, SellerState, SellerTell
 
 
-def _tell_to_model(tell: SellerTell | None) -> TellObservation | None:
+def _tell_to_model(
+    tell: SellerTell | None,
+    message: str = "",
+    history: list[str] | None = None,
+    use_nlp: bool = True,
+) -> TellObservation | None:
     if tell is None:
         return None
+
+    # NLP layer: extract language-based signals from the seller utterance.
+    # Rule-based body-language tells (fidget, posture, eye_contact) are kept
+    # from seller.py — NLP fills verbal and condition dimensions.
+    nlp_verbal: dict = {}
+    nlp_condition: dict = {}
+    if use_nlp and message:
+        try:
+            from nlp.extractor import TellExtractor
+            _extractor = TellExtractor()
+            extracted = _extractor.extract(message, history=history, fast=False)
+            nlp_verbal = {
+                "verbal_urgency": extracted["verbal_urgency"],
+                "verbal_confidence": extracted["verbal_confidence"],
+                "verbal_deception_cue": extracted["verbal_deception_cue"],
+                "emotional_escalation": extracted["emotional_escalation"],
+                "offer_speed": extracted["offer_speed"],
+                "concession_pattern": extracted["concession_pattern"],
+            }
+            nlp_condition = {
+                "condition_score": extracted["condition_score"],
+                "depreciation_score": extracted["depreciation_score"],
+                "condition_label": extracted["condition_label"],
+            }
+        except Exception:
+            pass  # extractor unavailable or Ollama down — fall back to rule-based
+
+    # Blend: NLP verbal signals averaged with rule-based where both exist.
+    # Rule-based is ground truth for non-verbal (fidget, posture, eye_contact).
+    # NLP takes precedence for condition since rule code has no condition signal.
+    def _blend(rule_val: float, nlp_val: float | None, nlp_weight: float = 0.55) -> float:
+        if nlp_val is None:
+            return rule_val
+        return round(rule_val * (1 - nlp_weight) + nlp_val * nlp_weight, 3)
+
     return TellObservation(
-        verbal_urgency=round(tell.verbal_urgency, 3),
-        verbal_confidence=round(tell.verbal_confidence, 3),
-        verbal_deception_cue=round(tell.verbal_deception_cue, 3),
+        verbal_urgency=_blend(tell.verbal_urgency, nlp_verbal.get("verbal_urgency")),
+        verbal_confidence=_blend(tell.verbal_confidence, nlp_verbal.get("verbal_confidence")),
+        verbal_deception_cue=_blend(tell.verbal_deception_cue, nlp_verbal.get("verbal_deception_cue")),
         price_rounding=tell.price_rounding,
-        offer_speed=tell.offer_speed,
-        concession_pattern=tell.concession_pattern,
+        offer_speed=nlp_verbal.get("offer_speed", tell.offer_speed),
+        concession_pattern=nlp_verbal.get("concession_pattern", tell.concession_pattern),
         fidget_level=round(tell.fidget_level, 3),
         eye_contact=tell.eye_contact,
         posture=tell.posture,
         repeat_phrases=tell.repeat_phrases,
         topic_changes=tell.topic_changes,
-        emotional_escalation=round(tell.emotional_escalation, 3),
+        emotional_escalation=_blend(tell.emotional_escalation, nlp_verbal.get("emotional_escalation")),
+        condition_score=nlp_condition.get("condition_score", 1.0),
+        depreciation_score=nlp_condition.get("depreciation_score", 0.0),
+        condition_label=nlp_condition.get("condition_label", "unknown"),
     )
 
 
@@ -276,8 +319,14 @@ class BazaarEnvironment:
 
         seller_action, seller_price, tell, msg = self.seller.respond(price, self.current_round)
 
-        # Record tell
-        tell_model = _tell_to_model(tell)
+        # Build conversation history for NLP context (last 4 turns)
+        recent_history = [
+            f"{h['actor']}: {h.get('price', '')}" for h in self.offer_history[-4:]
+        ]
+
+        # Record tell — NLP layer blends language signals into rule-based tells
+        use_nlp = getattr(self.task, "enable_nlp", False)
+        tell_model = _tell_to_model(tell, message=msg, history=recent_history, use_nlp=use_nlp)
         if tell_model and self.task.enable_tells:
             self.tells_history.append(tell_model)
 

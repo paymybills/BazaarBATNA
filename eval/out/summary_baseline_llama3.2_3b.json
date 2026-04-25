@@ -1,0 +1,36 @@
+{
+  "baseline:llama3.2:3b/amazon_realistic": {
+    "n": 20,
+    "mean_normalized_surplus": 0.2341,
+    "mean_task_score": 0.2341,
+    "deal_rate": 1.0,
+    "mean_rounds": 2.05,
+    "mean_surplus_on_deal": 0.2341
+  },
+  "baseline:llama3.2:3b/read_the_tells": {
+    "n": 20,
+    "mean_normalized_surplus": 0.3079,
+    "mean_task_score": 0.3109,
+    "deal_rate": 0.65,
+    "mean_rounds": 1.9,
+    "mean_surplus_on_deal": 0.4736
+  },
+  "baseline:llama3.2:3b/career_10": {
+    "n": 20,
+    "mean_normalized_surplus": 0.705,
+    "mean_task_score": 0.6533,
+    "deal_rate": 1.0,
+    "mean_rounds": 1.95,
+    "mean_surplus_on_deal": 0.705
+  },
+  "_meta": {
+    "policy": "baseline:llama3.2:3b",
+    "n_per_task": 20,
+    "tasks": [
+      "amazon_realistic",
+      "read_the_tells",
+      "career_10"
+    ],
+    "elapsed_s": 234.5
+  }
+}

@@ -15,6 +15,22 @@ BazaarBATNA is an OpenEnv-compliant negotiation project with two deliverables:
 1. **BazaarBATNA Platform**: the environment, API server, tasks, UI, replay/arena systems.
 2. **BazaarBot Agent**: the trained buyer model and its inference/evaluation pipeline.
 
+## Headline results
+
+| Policy | amazon_realistic | read_the_tells | career_10 | deal rate |
+|---|---:|---:|---:|---:|
+| `rule_based` | 0.396 | 0.041 | 0.805 | 95 / 5 / 100 |
+| `baseline:llama3.2:3b` | 0.234 | 0.308 | 0.705 | 100 / 65 / 100 |
+| **`ollama:bestdealbot`** | **0.913** | **0.418** | **0.972** | **100 / 100 / 100** |
+
+n=20 per task. Mean normalized surplus on [0, 1]. Bestdealbot wins every task and closes 100% of deals.
+
+- **+131%** vs rule-based on `amazon_realistic`
+- **+916%** vs rule-based on `read_the_tells` (the tells-heavy suite)
+- Stack runs in ~7 GB VRAM (RTX 2050 class)
+
+See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for full transcripts. Sister landing-page repo: [paymybills/MolBhav](https://github.com/paymybills/MolBhav).
+
 ---
 
 ## BazaarBATNA Platform
@@ -125,6 +141,31 @@ Outputs:
 
 - `eval/out/results_*.jsonl`
 - `eval/out/summary_*.json`
+
+---
+
+## Latest benchmark snapshot (n=20)
+
+Tasks: `amazon_realistic`, `read_the_tells`, `career_10`  
+Policies: `rule_based`, `baseline:llama3.2:3b`, `ollama:bestdealbot` (with Bayesian steering + adaptive fallback)
+
+| Policy | Task | Mean normalized surplus | Deal rate | Mean rounds |
+|---|---|---:|---:|---:|
+| rule_based | amazon_realistic | 0.3957 | 0.95 | 3.8 |
+| baseline:llama3.2:3b | amazon_realistic | 0.2341 | 1.00 | 2.05 |
+| ollama:bestdealbot | amazon_realistic | **0.9132** | 1.00 | 7.5 |
+| rule_based | read_the_tells | 0.0411 | 0.05 | 2.0 |
+| baseline:llama3.2:3b | read_the_tells | 0.3079 | 0.65 | 1.9 |
+| ollama:bestdealbot | read_the_tells | **0.4176** | 1.00 | 2.0 |
+| rule_based | career_10 | 0.8045 | 1.00 | 3.9 |
+| baseline:llama3.2:3b | career_10 | 0.7050 | 1.00 | 1.95 |
+| ollama:bestdealbot | career_10 | **0.9717** | 1.00 | 7.8 |
+
+Source files:
+
+- `eval/out/summary_rule_based.json`
+- `eval/out/summary_baseline_llama3.2_3b.json`
+- `eval/out/summary_ollama_bestdealbot.json`
 
 ---
 

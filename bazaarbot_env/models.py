@@ -47,6 +47,10 @@ class TellObservation(BaseModel):
     repeat_phrases: int = 0
     topic_changes: int = 0
     emotional_escalation: float = 0.0
+    # Condition/depreciation signals (NLP-extracted from listing text or utterance)
+    condition_score: float = 1.0        # 0=junk, 1=mint
+    depreciation_score: float = 0.0    # 0=none, 1=heavily worn
+    condition_label: str = "unknown"   # new/like_new/very_good/good/acceptable/junk
 
 
 class DealRecord(BaseModel):
@@ -132,6 +136,8 @@ class TaskConfig(BaseModel):
     success_threshold: float = 0.3
     seller_personality: SellerPersonalityType = SellerPersonalityType.DEFAULT
     enable_tells: bool = True
+    # NLP tell extraction via Ollama (disable during fast GRPO rollouts)
+    enable_nlp: bool = False
     # Multi-buyer mode
     num_buyers: int = 1
     enable_coalition: bool = False

@@ -10,3 +10,9 @@ data/
 ui/node_modules/
 ui/.next/
 ui/out/
+
+# Large datasets and local logs
+negotiations_public_release/
+amazon.csv.zip
+grpo_log.txt
+[External]*.txt
