@@ -12,7 +12,7 @@
 #     FLAVOR=l4x1 bash scripts/run_seller_eval_hfjobs.sh          # cheaper / pick a different GPU
 #     N_EPISODES=20 bash scripts/run_seller_eval_hfjobs.sh        # smoke run with fewer episodes
 
-set -euo pipefail
+set -eo pipefail
 
 FLAVOR="${FLAVOR:-a10g-small}"
 N_EPISODES="${N_EPISODES:-50}"
@@ -28,14 +28,14 @@ if [ "${1:-}" = "--foreground" ]; then
     DETACH=""
 fi
 
-# Inline shell that runs inside the container
-JOB_SCRIPT='
+# This script body runs inside the container. Variables like $MODEL, $N_EPISODES,
+# $SPLIT, $SEED, $RESULTS_REPO are passed in via `hf jobs run -e`. Container
+# only — host shell never expands them in this string (single-quoted).
+read -r -d '' JOB_SCRIPT <<'CONTAINER_SCRIPT' || true
 set -eux
 
-# 1. System deps (the pytorch runtime image is bare-bones)
 apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null
 
-# 2. Python deps — known-good combination from buyer training
 pip install -q --no-cache-dir \
     "huggingface_hub>=0.30" \
     "transformers>=4.46" \
@@ -45,11 +45,9 @@ pip install -q --no-cache-dir \
     "sentencepiece>=0.2" \
     "requests>=2.31"
 
-# 3. Clone repo
 git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo
 cd /workspace/repo
 
-# 4. Download CraigslistBargains via Codalab (HF dataset script is dead)
 mkdir -p data
 python - <<PYEOF
 import json, requests
@@ -80,33 +78,33 @@ for split, name in [("train","train"), ("dev","dev")]:
     print(f"  data/{name}.json: {len(rows)} listings")
 PYEOF
 
-# 5. Run the eval
 PYTHONPATH=. python eval/seller_quality.py \
-    --model '"$MODEL"' \
-    --split '"$SPLIT"' \
-    --n '"$N_EPISODES"' \
-    --seed '"$SEED"'
+    --model "$MODEL" \
+    --split "$SPLIT" \
+    --n "$N_EPISODES" \
+    --seed "$SEED"
 
-# 6. Upload run dir to HF dataset for persistence
 LATEST_RUN=$(ls -1dt runs/*_seller_quality | head -1)
-echo "Uploading $LATEST_RUN to '"$RESULTS_REPO"' ..."
-python - <<PYEOF
+echo "Uploading $LATEST_RUN to $RESULTS_REPO ..."
+RUN_NAME=$(basename "$LATEST_RUN")
+RESULTS_REPO="$RESULTS_REPO" RUN_NAME="$RUN_NAME" LATEST_RUN="$LATEST_RUN" N_EPISODES="$N_EPISODES" python - <<PYEOF
+import os
 from huggingface_hub import HfApi
 api = HfApi()
-repo_id = "'"$RESULTS_REPO"'"
+repo_id = os.environ["RESULTS_REPO"]
 api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
 api.upload_folder(
-    folder_path="'"$LATEST_RUN"'",
-    path_in_repo="'"$LATEST_RUN"'".split("/")[-1],
+    folder_path=os.environ["LATEST_RUN"],
+    path_in_repo=os.environ["RUN_NAME"],
     repo_id=repo_id,
     repo_type="dataset",
-    commit_message=f"seller_quality run from HF Jobs (n='"$N_EPISODES"')",
+    commit_message=f"seller_quality run from HF Jobs (n={os.environ['N_EPISODES']})",
 )
-print(f"Pushed to https://huggingface.co/datasets/{repo_id}")
+print(f"Pushed to https://huggingface.co/datasets/{repo_id}/tree/main/{os.environ['RUN_NAME']}")
 PYEOF
 
 echo "DONE"
-'
+CONTAINER_SCRIPT
 
 echo "Submitting HF Job:"
 echo "  flavor:    $FLAVOR"
