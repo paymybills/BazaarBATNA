@@ -67,6 +67,80 @@ def rule_based_policy(obs: dict) -> dict:
             "message": render("offer", price, ask=ask, turn_index=rnd, max_turns=max_r)}
 
 
+def make_hf_policy(
+    model_name: str,
+    adapter_name: str | None = None,
+    use_bayesian_steering: bool = True,
+    temperature: float = 0.7,
+    max_new_tokens: int = 96,
+) -> Policy:
+    """HF Transformers buyer policy. Loads a base model (4-bit if CUDA), optionally
+    attaches a PEFT adapter on top. Used for the scaling-ladder eval where we
+    compare base vs SFT/DPO at multiple parameter counts on the same hardware.
+    """
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+    tok = AutoTokenizer.from_pretrained(model_name, use_fast=True, trust_remote_code=True)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+
+    kwargs: dict[str, Any] = {"device_map": "auto", "trust_remote_code": True}
+    if torch.cuda.is_available():
+        kwargs["torch_dtype"] = torch.bfloat16
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+        )
+    else:
+        kwargs["torch_dtype"] = torch.float32
+
+    model = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+    if adapter_name:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, adapter_name)
+    model.config.use_cache = True
+    model.eval()
+
+    def _chat(system: str, user: str) -> str:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        prompt = None
+        if getattr(tok, "chat_template", None):
+            try:
+                prompt = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            except Exception:
+                prompt = None
+        if prompt is None:
+            prompt = f"{system}\n\n{user}\n"
+        inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=2048).to(model.device)
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=temperature > 0,
+                temperature=max(temperature, 1e-5),
+                top_p=0.9,
+                pad_token_id=tok.eos_token_id,
+            )
+        text = tok.decode(out[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
+        return text
+
+    def policy(obs: dict) -> dict:
+        text = _chat(DEFAULT_SYSTEM_PROMPT, format_observation(obs))
+        action = parse_action(text, fallback_price=obs.get("own_private_budget", 100) * 0.3)
+        action.pop("_parse_error", None)
+        if use_bayesian_steering:
+            action = steer_bayesian_action(obs, action)
+        return action
+
+    return policy
+
+
 def make_ollama_policy(
     model_name: str,
     host: str = "http://localhost:11434",
@@ -209,6 +283,14 @@ def resolve_policy(args: argparse.Namespace) -> tuple[str, Policy]:
     if kind == "baseline":
         name = args.baseline_model or "llama3.2:3b"
         return f"baseline:{name}", make_ollama_policy(name, use_bayesian_steering=False)
+    if kind == "hf":
+        base = args.hf_base
+        adapter = args.hf_adapter or None
+        if not base:
+            raise ValueError("--hf_base required for --policy hf")
+        steer = bool(args.hf_steer)
+        label = f"hf:{base}" + (f"+{adapter}" if adapter else "")
+        return label, make_hf_policy(base, adapter_name=adapter, use_bayesian_steering=steer)
     raise ValueError(f"unknown policy: {kind}")
 
 
@@ -240,9 +322,12 @@ def summarize(rows: list[EpisodeResult]) -> dict[str, Any]:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=["rule_based", "ollama", "baseline"], required=True)
+    p.add_argument("--policy", choices=["rule_based", "ollama", "baseline", "hf"], required=True)
     p.add_argument("--model", help="ollama model name (for --policy ollama)")
     p.add_argument("--baseline_model", help="ollama model name (for --policy baseline)")
+    p.add_argument("--hf_base", help="HF base model id (for --policy hf), e.g. meta-llama/Llama-3.1-8B-Instruct")
+    p.add_argument("--hf_adapter", help="optional PEFT adapter id stacked on hf_base, e.g. PayMyBills/bestdealbot-v3-dpo")
+    p.add_argument("--hf_steer", type=int, default=0, help="1 = apply Bayesian seller-tell steering on top of HF policy")
     p.add_argument("--n", type=int, default=50, help="episodes per task")
     p.add_argument("--tasks", nargs="+",
                    default=["single_deal", "asymmetric_pressure", "amazon_realistic"])

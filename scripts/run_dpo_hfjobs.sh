@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# Run DPO training as an HF Job on A10G.
+#
+# Pipeline inside container:
+#   1. clone repo
+#   2. install deps
+#   3. build dpo_pairs.jsonl via eval/build_dpo_pairs.py (Claude-as-judge)
+#      OR pull pre-built pairs from PAIRS_HF_REPO
+#   4. run training/v2/dpo.py — pushes adapter to REPO_ID
+#   5. upload run dir to RESULTS_REPO
+#
+# Usage:
+#     bash scripts/run_dpo_hfjobs.sh                          # detached
+#     bash scripts/run_dpo_hfjobs.sh --foreground             # streams logs
+#     N_PAIRS=30 bash scripts/run_dpo_hfjobs.sh               # smoke
+#     SKIP_PAIR_BUILD=1 PAIRS_HF_REPO=PayMyBills/dpo-pairs bash scripts/run_dpo_hfjobs.sh
+
+set -eo pipefail
+
+FLAVOR="${FLAVOR:-a10g-large}"
+N_PAIRS="${N_PAIRS:-100}"
+BUYER_MODEL="${BUYER_MODEL:-PayMyBills/bestdealbot-v2}"
+SELLER_MODEL="${SELLER_MODEL:-google/gemma-4-E4B}"
+SFT_HF_REPO="${SFT_HF_REPO:-PayMyBills/bestdealbot-v2}"
+REPO_ID="${REPO_ID:-PayMyBills/bestdealbot-v3-dpo}"
+RESULTS_REPO="${RESULTS_REPO:-PayMyBills/dpo-runs}"
+PAIRS_HF_REPO="${PAIRS_HF_REPO:-PayMyBills/dpo-pairs}"
+SKIP_PAIR_BUILD="${SKIP_PAIR_BUILD:-0}"
+BETA="${BETA:-0.1}"
+LR="${LR:-5e-6}"
+EPOCHS="${EPOCHS:-1}"
+TIMEOUT="${TIMEOUT:-3h}"
+IMAGE="${IMAGE:-python:3.11-slim}"
+
+DETACH="-d"
+if [ "${1:-}" = "--foreground" ]; then
+    DETACH=""
+fi
+
+read -r -d '' JOB_SCRIPT <<'CONTAINER_SCRIPT' || true
+set -eux
+
+apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null
+
+pip install -q --no-cache-dir \
+    "torch>=2.4" \
+    "huggingface_hub>=0.30" \
+    "transformers>=4.46" \
+    "accelerate>=1.1" \
+    "bitsandbytes>=0.44" \
+    "peft>=0.13" \
+    "trl>=0.12" \
+    "datasets>=3.0" \
+    "sentencepiece>=0.2" \
+    "requests>=2.31" \
+    "pydantic>=2.0" \
+    "anthropic>=0.40"
+
+git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo
+cd /workspace/repo
+
+mkdir -p data
+python - <<PYEOF
+import json, requests
+URLS = {
+    "train": "https://worksheets.codalab.org/rest/bundles/0xd34bbbc5fb3b4fccbd19e10756ca8dd7/contents/blob/parsed.json",
+    "dev":   "https://worksheets.codalab.org/rest/bundles/0x15c4160b43d44ee3a8386cca98da138c/contents/blob/parsed.json",
+}
+def to_float(x):
+    if x is None: return None
+    try: return float(str(x).replace("$","").replace(",",""))
+    except: return None
+def flatten(ex):
+    sc = ex.get("scenario") or {}
+    kbs = sc.get("kbs") or []
+    seller = next((kb for kb in kbs if (kb.get("personal") or {}).get("Role","").lower()=="seller"), kbs[0] if kbs else None)
+    if not seller: return None
+    item = seller.get("item") or {}
+    desc = item.get("Description")
+    if isinstance(desc, list): desc = " ".join(str(x) for x in desc)
+    price = to_float(item.get("Price") or (seller.get("personal") or {}).get("Target"))
+    if price is None: return None
+    return {"category": sc.get("category","unknown"), "title": str(item.get("Title") or "untitled"),
+            "description": str(desc or ""), "price": price}
+for split, name in [("train","train"), ("dev","dev")]:
+    raw = requests.get(URLS[split], timeout=120).json()
+    rows = [r for ex in raw if (r := flatten(ex))]
+    with open(f"data/{name}.json","w") as f: json.dump(rows, f)
+    print(f"  data/{name}.json: {len(rows)} listings")
+PYEOF
+
+if [ "$SKIP_PAIR_BUILD" = "1" ]; then
+    echo "Pulling pre-built pairs from $PAIRS_HF_REPO"
+    python - <<PYEOF
+from huggingface_hub import hf_hub_download
+import shutil, os
+p = hf_hub_download(repo_id=os.environ["PAIRS_HF_REPO"], filename="dpo_pairs.jsonl", repo_type="dataset")
+os.makedirs("data", exist_ok=True)
+shutil.copy(p, "data/dpo_pairs.jsonl")
+print("Copied to data/dpo_pairs.jsonl")
+PYEOF
+else
+    echo "Building $N_PAIRS DPO pairs (judge: Claude-as-judge if ANTHROPIC_API_KEY set, else heuristic)"
+    PYTHONPATH=. python eval/build_dpo_pairs.py \
+        --buyer-model "$BUYER_MODEL" \
+        --seller-model "$SELLER_MODEL" \
+        --n "$N_PAIRS" \
+        --out data/dpo_pairs.jsonl
+    # Mirror the pairs to a dataset repo so future runs can SKIP_PAIR_BUILD=1
+    python - <<PYEOF
+import os
+from huggingface_hub import HfApi
+api = HfApi()
+repo = os.environ["PAIRS_HF_REPO"]
+api.create_repo(repo_id=repo, repo_type="dataset", exist_ok=True)
+api.upload_file(
+    path_or_fileobj="data/dpo_pairs.jsonl",
+    path_in_repo="dpo_pairs.jsonl",
+    repo_id=repo,
+    repo_type="dataset",
+    commit_message=f"pairs built from $BUYER_MODEL vs $SELLER_MODEL, n=$N_PAIRS",
+)
+print(f"Mirrored pairs to https://huggingface.co/datasets/{repo}")
+PYEOF
+fi
+
+# Train
+HF_PUSH=1 \
+PAIRS_PATH=data/dpo_pairs.jsonl \
+SFT_HF_REPO="$SFT_HF_REPO" \
+REPO_ID="$REPO_ID" \
+BETA="$BETA" LR="$LR" EPOCHS="$EPOCHS" \
+PYTHONPATH=. python training/v2/dpo.py
+
+LATEST_RUN=$(ls -1dt runs/*_dpo_8b | head -1)
+echo "Uploading $LATEST_RUN to $RESULTS_REPO ..."
+RUN_NAME=$(basename "$LATEST_RUN")
+RESULTS_REPO="$RESULTS_REPO" RUN_NAME="$RUN_NAME" LATEST_RUN="$LATEST_RUN" python - <<PYEOF
+import os
+from huggingface_hub import HfApi
+api = HfApi()
+repo_id = os.environ["RESULTS_REPO"]
+api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
+api.upload_folder(
+    folder_path=os.environ["LATEST_RUN"],
+    path_in_repo=os.environ["RUN_NAME"],
+    repo_id=repo_id,
+    repo_type="dataset",
+    commit_message=f"dpo run from HF Jobs",
+)
+print(f"Pushed to https://huggingface.co/datasets/{repo_id}/tree/main/{os.environ['RUN_NAME']}")
+PYEOF
+
+echo "DONE"
+CONTAINER_SCRIPT
+
+echo "Submitting DPO HF Job:"
+echo "  flavor:        $FLAVOR"
+echo "  image:         $IMAGE"
+echo "  base buyer:    $BUYER_MODEL"
+echo "  seller:        $SELLER_MODEL"
+echo "  start adapter: $SFT_HF_REPO"
+echo "  push to:       $REPO_ID"
+echo "  pairs target:  $N_PAIRS  (skip_build=$SKIP_PAIR_BUILD)"
+echo "  beta=$BETA  lr=$LR  epochs=$EPOCHS"
+echo
+
+# Pass ANTHROPIC_API_KEY through if set (so Claude-as-judge works inside container)
+ANTHROPIC_FLAG=""
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    ANTHROPIC_FLAG="-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
+fi
+
+hf jobs run \
+    $DETACH \
+    --flavor "$FLAVOR" \
+    --timeout "$TIMEOUT" \
+    --secrets HF_TOKEN \
+    -e BUYER_MODEL="$BUYER_MODEL" \
+    -e SELLER_MODEL="$SELLER_MODEL" \
+    -e SFT_HF_REPO="$SFT_HF_REPO" \
+    -e REPO_ID="$REPO_ID" \
+    -e RESULTS_REPO="$RESULTS_REPO" \
+    -e PAIRS_HF_REPO="$PAIRS_HF_REPO" \
+    -e SKIP_PAIR_BUILD="$SKIP_PAIR_BUILD" \
+    -e N_PAIRS="$N_PAIRS" \
+    -e BETA="$BETA" \
+    -e LR="$LR" \
+    -e EPOCHS="$EPOCHS" \
+    $ANTHROPIC_FLAG \
+    "$IMAGE" \
+    bash -c "$JOB_SCRIPT"
+
+if [ -n "$DETACH" ]; then
+    echo
+    echo "Stream logs: hf jobs logs <job_id>"
+fi
