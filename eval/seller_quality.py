@@ -93,6 +93,44 @@ def buyer_offer(
     return round(max(floor_advance, offer), 2)
 
 
+# Buyer-message templates: round-aware phrasing so transcripts read like real
+# negotiations instead of "I can do 60. I can do 70. I can do 75."
+# Mined to match the Hinglish-flavored register used by the (Sauda) buyer agent.
+BUYER_OPENING = [
+    "Hi, I'm interested. {price} chalega?",
+    "Saw the listing — would you take {price}?",
+    "Interested! {price} mein de dijiye please.",
+    "Hi! {price} for it?",
+    "Looking to buy. {price} se shuru karte hain?",
+]
+BUYER_MID = [
+    "Okay, can stretch to {price}. Will that work?",
+    "{price} chalega? Going as high as I reasonably can.",
+    "How about {price}? Meeting you part of the way.",
+    "Bumping to {price}. Honestly that's a fair number.",
+    "{price} mein ho jaye?",
+]
+BUYER_LATE = [
+    "{price} is honestly close to my ceiling. Let's close this.",
+    "Final stretch — {price}. Can we lock it?",
+    "Pushing to {price}. Want to wrap this up.",
+    "Okay {price}, that's where I'm at. Deal?",
+    "{price} bhai, yeh maximum hai mera.",
+]
+
+
+def buyer_message(price: float, round_idx: int, max_rounds: int, rng: random.Random) -> str:
+    """Pick a buyer line by round position so transcripts read like real chat."""
+    progress = round_idx / max(1, max_rounds)
+    if round_idx <= 1 or progress < 0.25:
+        pool = BUYER_OPENING
+    elif progress < 0.65:
+        pool = BUYER_MID
+    else:
+        pool = BUYER_LATE
+    return rng.choice(pool).format(price=int(round(price)))
+
+
 def judge_persona(
     model: str,
     expected: str,
@@ -123,7 +161,9 @@ def run_episode(
     listing: dict[str, Any],
     brief: dict[str, Any],
     max_rounds: int,
+    rng: random.Random | None = None,
 ) -> dict[str, Any]:
+    rng = rng or random.Random()
     seller = LLMSeller(listing, brief, model=model)
     transcript: list[dict[str, Any]] = []
 
@@ -141,7 +181,7 @@ def run_episode(
     for turn_i in range(1, max_rounds + 1):
         offer = buyer_offer(asking, turn_i, max_rounds, prev_offer, seller_last)
         prev_offer = offer
-        buyer_msg = f"I can do {offer:.0f}."
+        buyer_msg = buyer_message(offer, turn_i, max_rounds, rng)
         transcript.append({"role": "buyer", "message": buyer_msg, "price": offer})
 
         reply = seller.respond(transcript, buyer_msg, offer)
@@ -269,7 +309,7 @@ def main() -> None:
             listing = rng.choice(listings)
             brief = make_role_brief(listing, rng)
             try:
-                row = run_episode(args.model, listing, brief, args.max_rounds)
+                row = run_episode(args.model, listing, brief, args.max_rounds, rng=rng)
             except Exception as e:
                 print(f"  ! episode {i} failed: {e}")
                 continue
