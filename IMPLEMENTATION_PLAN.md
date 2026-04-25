@@ -164,28 +164,35 @@ my 7GB local VRAM" to "what fits in 24GB on HF compute, served via inference end
 
 **Locked model choices for v2:**
 
-- **Buyer (bestdealbot v2):** **Qwen2.5-32B-Instruct**, QLoRA fine-tuned (SFT → GRPO → DPO).
-  ~19GB at 4-bit, fits A10G with headroom for activations. Best instruction-following at the
-  size class. Llama-3.1-8B-Instruct is the fallback if 32B training surfaces issues.
+- **Buyer (bestdealbot v2):** **Llama-3 family** — hybrid approach:
+  - Iterate on **Llama-3.1-8B-Instruct** for the recipe (cheap, ~$1/hr A10G, fast turnaround)
+  - Final headline run on **Llama-3.3-70B-Instruct** (A100, ~$4/hr, one shot at it)
+  - QLoRA fine-tuned (SFT → GRPO → DPO)
 - **Seller (LLM seller, teammate's work):** **Gemma-2-9B-it**, prompted, no fine-tune. Different
   family from buyer = good failure-mode diversity.
 - **NLP extractor:** ministral-3:3b stays local. Latency-sensitive, fine-tune candidate if
   zero-shot eval shows gaps.
 
-**Training cost estimate:**
-- QLoRA SFT 32B, 1 epoch: ~$2-3
-- GRPO continuation: ~$3-5
-- DPO pass: ~$1-2
-- Multiple eval runs: ~$2-3
-- **Total: ~$10-15** of $30, leaving room for re-runs / ablations.
+**Training cost estimate (hybrid 8B → 70B):**
+- 8B QLoRA SFT iteration: ~$2-3
+- 8B GRPO/DPO debugging: ~$3-5
+- 70B QLoRA SFT, 1 epoch: ~$12-16
+- 70B GRPO continuation: ~$5-8 (or skip if 8B GRPO recipe transfers cleanly)
+- Eval runs: ~$3-5
+- **Total: ~$25-30** of $30. Tight but doable.
 
 **Serving:**
-- Demo tunnels to HF inference endpoint (~$0.50-1/hr while running, killed after demo)
-- Or push merged LoRA to HF Hub, judges download on their own A10G
+- Demo tunnels to HF inference endpoint (~$0.50-2/hr depending on model size)
+- Push merged LoRA to HF Hub for reproducibility
 - Local laptop only runs ministral + FastAPI orchestration during demo
 
-**Latency tradeoff:** 32B inference is ~3-5s per turn vs ~1s for 8B. Mitigated by streaming
-the response in the demo UI — perceived latency drops.
+**Latency tradeoff:** 70B inference is ~5-8s per turn. Mitigated by streaming the response
+in the demo UI. If latency kills the demo, fall back to the 8B variant for the live tunneled
+path and keep 70B as the "official" eval-numbers model.
+
+**Why no Qwen / no 27B-32B:** Llama-3 family is most familiar, well-supported by HF infra,
+and integrates cleanly with our existing SFT/GRPO notebook. No mid-size in Llama (8B → 70B
+gap), so we either stay small and iterate or go big and commit. We do both.
 
 ---
 

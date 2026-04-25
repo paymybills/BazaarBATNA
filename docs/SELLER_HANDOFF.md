@@ -1,11 +1,50 @@
-# LLM Seller — Handoff Package
+# Teammate Handoff — LLM Seller
+
+> **For: BazaarBATNA teammate building the seller.**
+> **From: paymybills (working on buyer + NLP + site).**
+> **Deadline: 5pm tomorrow (venue presentation).**
+> **Branch: `seller/llm-impl` off `main`.**
+> **PR back to main when acceptance numbers pass.**
 
 You're building the **LLM-backed seller** for BazaarBATNA. The buyer (MolBhav) is already
 trained and working. Right now the seller is a rule-based stub that says "5109 rupees. Not
 lower." in a loop. Your job: replace it with a Gemma-based LLM seller that **negotiates like
 a real human grounded in a real listing**.
 
-This doc is self-contained. You shouldn't need to read other code unless you want to.
+This doc is self-contained. You shouldn't need to read other code unless you want to. If
+something is unclear, ping me on Slack/WhatsApp before guessing — small misalignment now
+saves hours of rework.
+
+**TL;DR:** Implement `LLMSeller` per the interface in `bazaarbot_env/llm_seller.py`, finalize
+`data/craigslist_loader.py`, write `eval/seller_quality.py`, log everything to `runs/`,
+open a PR with 3 sample transcripts and passing acceptance numbers.
+
+---
+
+## Getting started in 5 minutes
+
+```bash
+git clone https://github.com/paymybills/BazaarBATNA.git
+cd BazaarBATNA
+git checkout -b seller/llm-impl
+
+# install deps (uv recommended, or pip)
+uv sync   # or: pip install -e .
+
+# pull the seller model
+ollama pull gemma2:9b
+
+# verify the stub runs
+PYTHONPATH=. python -c "
+from bazaarbot_env.llm_seller import LLMSeller
+s = LLMSeller({'title': 'iPhone 13'}, {'asking_price': 40000, 'reservation_price': 32000, 'persona': 'firm'})
+print(s.open())
+print(s.respond([], 'I will give you 25000', 25000))
+"
+```
+
+If that runs, you're set. Open `bazaarbot_env/llm_seller.py` and start filling in the body
+of `respond()` to call Gemma instead of returning canned strings.
 
 ---
 
