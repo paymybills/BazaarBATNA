@@ -254,11 +254,16 @@ class LLMSeller:
     # ── Prompt construction ─────────────────────────────────────
     def _system_prompt(self) -> str:
         return (
-            "You are a Craigslist seller negotiating with a buyer. "
-            "Stay grounded in the listing — only reference details from it. "
-            "Never reveal your reservation price or minimum. "
-            "Never accept below your reservation. "
-            "Keep replies short and human (1-3 sentences). "
+            "You are a Craigslist seller negotiating with a buyer. Your goal is to CLOSE A DEAL "
+            "above your minimum, not to walk away. \n\n"
+            "RULES:\n"
+            "- Stay grounded in the listing — only reference details from it.\n"
+            "- Never reveal your minimum/reservation price.\n"
+            "- Never accept below your minimum.\n"
+            "- Counter low offers — do NOT walk on the first lowball.\n"
+            "- Walk only as a last resort, after multiple bad-faith offers.\n"
+            "- Concede in steps; you want this sale.\n"
+            "- Keep replies short and human (1-3 sentences).\n\n"
             f"Persona: {self.persona}. {PERSONA_GUIDANCE[self.persona]}\n\n"
             f"LISTING TITLE: {self.title}\n"
             f"CATEGORY: {self.category}\n"
@@ -292,8 +297,22 @@ class LLMSeller:
             return {"message": "What's your offer?", "action": "counter", "price": round(self._last_counter, 2)}
         if buyer_offer >= self.asking:
             return {"message": "Sounds good. Deal.", "action": "accept", "price": round(buyer_offer, 2)}
-        if buyer_offer < self.reservation * 0.8:
-            return {"message": "That's too low for this listing.", "action": "walk", "price": None}
+        if buyer_offer >= self.reservation:
+            return {
+                "message": f"You can have it at {buyer_offer:.0f}.",
+                "action": "accept",
+                "price": round(buyer_offer, 2),
+            }
+        # Don't walk on first lowballs — counter and let the buyer come up.
+        # Only walk if the offer is genuinely insulting (< 50% of asking).
+        if buyer_offer < self.asking * 0.5:
+            counter = max(self.reservation, self._last_counter * 0.95)
+            self._last_counter = counter
+            return {
+                "message": f"That's far too low. I can do {counter:.0f}, take it or leave it.",
+                "action": "counter",
+                "price": round(counter, 2),
+            }
         counter = self._next_counter(buyer_offer)
         self._last_counter = counter
         return {"message": f"I can do {counter:.0f}.", "action": "counter", "price": counter}
@@ -387,7 +406,24 @@ class LLMSeller:
             self._last_counter = float(out["price"])
 
         else:  # walk
-            out["price"] = None
+            # Anti-premature-walk: if early in negotiation (< 3 seller turns done),
+            # override to a counter — buyers often need a few rounds to come up.
+            seller_turns_so_far = sum(1 for t in history if t.get("role") == "seller")
+            buyer_above_half_asking = (
+                buyer_offer is not None and float(buyer_offer) >= self.asking * 0.5
+            )
+            if seller_turns_so_far < 3 and buyer_above_half_asking:
+                counter = self._next_counter(buyer_offer)
+                self._last_counter = counter
+                out = {
+                    "action": "counter",
+                    "price": round(counter, 2),
+                    "message": self._sanitize(
+                        f"That's too low for what this is. I can do {counter:.0f}."
+                    ),
+                }
+            else:
+                out["price"] = None
 
         out["message"] = self._sanitize(str(out["message"]))
         return out  # type: ignore[return-value]
