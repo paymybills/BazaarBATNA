@@ -38,8 +38,15 @@ _BUYER_BUNDLE: dict[str, Any] = {}
 
 def _load_buyer(base_model: str, adapter: str | None) -> tuple[Any, Any, Any]:
     """Cache (tokenizer, model, device) bundle. Adapter optional — when None we
-    sample from the base model directly."""
-    key = f"{base_model}::{adapter or '-'}"
+    sample from the base model directly.
+
+    BUYER_DTYPE env-var picks the loader path:
+      - "4bit" (default): bnb 4-bit nf4, lowest VRAM, slowest generation
+      - "bf16": full bfloat16, ~2x VRAM, ~5-10x faster generation
+      - "fp16": full float16, same as bf16 in VRAM/speed (Ampere+ uses bf16 anyway)
+    """
+    import os as _os
+    key = f"{base_model}::{adapter or '-'}::{_os.environ.get('BUYER_DTYPE', '4bit')}"
     if key in _BUYER_BUNDLE:
         b = _BUYER_BUNDLE[key]
         return b["tok"], b["model"], b["device"]
@@ -51,15 +58,21 @@ def _load_buyer(base_model: str, adapter: str | None) -> tuple[Any, Any, Any]:
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    dtype_choice = _os.environ.get("BUYER_DTYPE", "4bit").lower()
     kwargs: dict[str, Any] = {"device_map": "auto", "trust_remote_code": True}
     if torch.cuda.is_available():
-        kwargs["torch_dtype"] = torch.bfloat16
-        kwargs["quantization_config"] = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
+        if dtype_choice == "4bit":
+            kwargs["torch_dtype"] = torch.bfloat16
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+        elif dtype_choice == "fp16":
+            kwargs["torch_dtype"] = torch.float16
+        else:  # "bf16" or unrecognised → bf16
+            kwargs["torch_dtype"] = torch.bfloat16
     else:
         kwargs["torch_dtype"] = torch.float32
 

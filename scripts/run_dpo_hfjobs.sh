@@ -20,8 +20,14 @@ set -eo pipefail
 FLAVOR="${FLAVOR:-a10g-large}"
 N_PAIRS="${N_PAIRS:-100}"
 MAX_ROUNDS="${MAX_ROUNDS:-6}"
-BUYER_BASE="${BUYER_BASE:-unsloth/Meta-Llama-3.1-8B-Instruct}"
-BUYER_ADAPTER="${BUYER_ADAPTER:-PayMyBills/bestdealbot-v2}"
+# Pair-build buyer is throwaway sampling — use 3B for ~3x faster generates.
+# DPO target adapter (REPO_ID) can still be 8B since the trainer reads pair
+# *text*, not whoever generated it.
+BUYER_BASE="${BUYER_BASE:-unsloth/Llama-3.2-3B-Instruct}"
+BUYER_ADAPTER="${BUYER_ADAPTER:--}"
+# DTYPE: "4bit" (low VRAM, slow), "bf16" (more VRAM, ~5x faster), "fp16"
+BUYER_DTYPE="${BUYER_DTYPE:-bf16}"
+SELLER_DTYPE="${SELLER_DTYPE:-bf16}"
 TEMP_A="${TEMP_A:-0.5}"
 TEMP_B="${TEMP_B:-0.9}"
 SELLER_MODEL="${SELLER_MODEL:-google/gemma-4-E4B}"
@@ -164,15 +170,15 @@ echo "DONE"
 CONTAINER_SCRIPT
 
 echo "Submitting DPO HF Job:"
-echo "  flavor:         $FLAVOR"
-echo "  image:          $IMAGE"
-echo "  buyer base:     $BUYER_BASE"
-echo "  buyer adapter:  $BUYER_ADAPTER"
-echo "  buyer temps:    $TEMP_A vs $TEMP_B"
-echo "  seller:         $SELLER_MODEL"
-echo "  start adapter:  $SFT_HF_REPO"
-echo "  push to:        $REPO_ID"
-echo "  pairs target:   $N_PAIRS  (skip_build=$SKIP_PAIR_BUILD)"
+echo "  flavor:           $FLAVOR"
+echo "  image:            $IMAGE"
+echo "  buyer base:       $BUYER_BASE  ($BUYER_DTYPE)"
+echo "  buyer adapter:    $BUYER_ADAPTER"
+echo "  buyer temps:      $TEMP_A vs $TEMP_B"
+echo "  seller:           $SELLER_MODEL  ($SELLER_DTYPE)"
+echo "  start adapter:    $SFT_HF_REPO"
+echo "  push to:          $REPO_ID"
+echo "  pairs target:     $N_PAIRS  (max_rounds=$MAX_ROUNDS, skip_build=$SKIP_PAIR_BUILD)"
 echo "  beta=$BETA  lr=$LR  epochs=$EPOCHS"
 echo
 
@@ -189,6 +195,8 @@ hf jobs run \
     --secrets HF_TOKEN \
     -e BUYER_BASE="$BUYER_BASE" \
     -e BUYER_ADAPTER="$BUYER_ADAPTER" \
+    -e BUYER_DTYPE="$BUYER_DTYPE" \
+    -e SELLER_DTYPE="$SELLER_DTYPE" \
     -e TEMP_A="$TEMP_A" \
     -e TEMP_B="$TEMP_B" \
     -e MAX_ROUNDS="$MAX_ROUNDS" \
