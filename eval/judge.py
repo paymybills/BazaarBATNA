@@ -56,20 +56,25 @@ def _heuristic_compare(
     """Fallback when no API key: compare on buyer_share."""
 
     def share(rollout):
-        for t in rollout:
-            if t.get("role") == "buyer" and t.get("action") == "accept":
-                # Last seller offer before accept = agreed price
-                pass
-        # Find agreed price: the seller turn where buyer next accepts
+        # Agreed price: whoever (buyer or seller) emits action=accept first.
+        # If buyer accepts → agreed is the most recent SELLER price (seller's
+        # last counter that buyer agreed to). If seller accepts → agreed is
+        # the most recent BUYER offer (buyer's last offer that seller accepted).
         agreed = None
         for i, t in enumerate(rollout):
-            if t.get("role") == "buyer" and t.get("action") == "accept":
-                # Look back for the last seller price
-                for prev in reversed(rollout[:i]):
-                    if prev.get("role") == "seller" and prev.get("price") is not None:
-                        agreed = float(prev["price"])
-                        break
-                break
+            if t.get("action") != "accept":
+                continue
+            who = t.get("role")
+            other = "seller" if who == "buyer" else "buyer"
+            for prev in reversed(rollout[:i + 1]):
+                if prev.get("role") == other and prev.get("price") is not None:
+                    agreed = float(prev["price"])
+                    break
+            # Fallback: if accepter has a price, use it (some sellers emit
+            # price on accept turn).
+            if agreed is None and t.get("price") is not None:
+                agreed = float(t["price"])
+            break
         if agreed is None:
             return None
         zopa = buyer_budget - seller_cost
@@ -78,8 +83,24 @@ def _heuristic_compare(
         return (buyer_budget - agreed) / zopa
 
     sa, sb = share(rollout_a), share(rollout_b)
+
     if sa is None and sb is None:
-        return {"winner": "tie", "reason": "Both rollouts failed to close."}
+        # Soft fallback: neither closed, but we can still rank by who pushed
+        # the seller's final counter lower (= would have been a better deal).
+        def final_seller_price(rollout):
+            last = None
+            for t in rollout:
+                if t.get("role") == "seller" and t.get("price") is not None:
+                    last = float(t["price"])
+            return last
+        pa, pb = final_seller_price(rollout_a), final_seller_price(rollout_b)
+        if pa is None or pb is None:
+            return {"winner": "tie", "reason": "Both rollouts failed to close, no seller prices."}
+        if abs(pa - pb) < buyer_budget * 0.02:
+            return {"winner": "tie", "reason": f"Both failed to close at similar prices: A=${pa:.0f}, B=${pb:.0f}"}
+        if pa < pb:
+            return {"winner": "a", "reason": f"Both failed to close, A drove seller lower (${pa:.0f} vs ${pb:.0f})"}
+        return {"winner": "b", "reason": f"Both failed to close, B drove seller lower (${pb:.0f} vs ${pa:.0f})"}
     if sa is None:
         return {"winner": "b", "reason": "A failed to close, B closed."}
     if sb is None:
