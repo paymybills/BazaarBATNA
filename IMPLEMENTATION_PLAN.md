@@ -162,18 +162,51 @@ Implement in `eval/scoring.py` and retrofit existing `eval/out/*.jsonl` results.
 A10G with 4-bit quant fits 30-32B param models. Default mental model shifts from "what fits in
 my 7GB local VRAM" to "what fits in 24GB on HF compute, served via inference endpoint."
 
-- **Buyer (bestdealbot v2):** Qwen3-32B or Qwen2.5-32B, 4-bit, LoRA fine-tuned. Served via HF
-  inference endpoint. Demo tunnels to it.
-- **Seller (gemma_seller):** Gemma-2-9B-it or Qwen2.5-14B, prompted, no fine-tune. Served same way.
-- **NLP extractor:** ministral-3:3b stays local. Latency-sensitive, runs alongside everything
-  else without competing for the big-model GPU.
+**Locked model choices for v2:**
 
-Local 7GB VRAM is no longer a hard constraint. The demo path is **HF inference endpoint →
-cloudflared tunnel from laptop running just ministral + the FastAPI orchestration layer**.
+- **Buyer (bestdealbot v2):** **Qwen2.5-32B-Instruct**, QLoRA fine-tuned (SFT → GRPO → DPO).
+  ~19GB at 4-bit, fits A10G with headroom for activations. Best instruction-following at the
+  size class. Llama-3.1-8B-Instruct is the fallback if 32B training surfaces issues.
+- **Seller (LLM seller, teammate's work):** **Gemma-2-9B-it**, prompted, no fine-tune. Different
+  family from buyer = good failure-mode diversity.
+- **NLP extractor:** ministral-3:3b stays local. Latency-sensitive, fine-tune candidate if
+  zero-shot eval shows gaps.
 
-If HF endpoint cost is a concern post-credits: the smaller local models still work. Story
-becomes "we trained on A10G, here are the numbers; demo uses a smaller model that fits a
-laptop, here's the gap." Both stories are honest.
+**Training cost estimate:**
+- QLoRA SFT 32B, 1 epoch: ~$2-3
+- GRPO continuation: ~$3-5
+- DPO pass: ~$1-2
+- Multiple eval runs: ~$2-3
+- **Total: ~$10-15** of $30, leaving room for re-runs / ablations.
+
+**Serving:**
+- Demo tunnels to HF inference endpoint (~$0.50-1/hr while running, killed after demo)
+- Or push merged LoRA to HF Hub, judges download on their own A10G
+- Local laptop only runs ministral + FastAPI orchestration during demo
+
+**Latency tradeoff:** 32B inference is ~3-5s per turn vs ~1s for 8B. Mitigated by streaming
+the response in the demo UI — perceived latency drops.
+
+---
+
+## 📌 PINNED: Future work (not for venue)
+
+Items that are good ideas but explicitly out of scope. Pin here so they don't get lost,
+and so the README "future work" section writes itself.
+
+- **Multi-item combo deals** ("MacBook + iPad bundle for ₹85k"). Requires new listing schema,
+  per-item reservations, unbundle support in buyer prompts, new grader. Also requires
+  artificially modeling buyer "need" for bundle items. ~5 hours, breaks single-item eval
+  pipeline if rushed. Save for v2 blog post.
+- **Vision on the buyer side** — read condition wear from listing photos. Real architectural
+  shift (text-only → multimodal). Days of work, not hours.
+- **True self-play** — both buyer and seller learning. Multi-week project. CICERO-tier.
+- **Live web scraping** of OLX/Quikr for comparable listings. Legal + reliability risk. Pre-cached
+  comps for the demo are fine.
+- **Floating Grammarly-style overlay** for live tells highlighting. In-bubble post-send
+  highlighting gets 90% of the demo win for 10% of the engineering.
+- **Public agent submission leaderboard** — accept community agents via the OpenEnv API,
+  rank against MolBhav. Cool platform play, real moderation problem.
 
 ---
 
