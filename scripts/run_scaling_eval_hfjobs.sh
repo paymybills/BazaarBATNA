@@ -103,7 +103,7 @@ PYEOF
 OUT_DIR="runs/$(date +%Y%m%d_%H%M%S)_scaling_eval"
 mkdir -p "$OUT_DIR"
 
-echo "$LADDER" | while IFS='|' read -r LABEL BASE ADAPTER STEER; do
+while IFS='|' read -r LABEL BASE ADAPTER STEER; do
     [ -z "$LABEL" ] && continue
     echo
     echo "════════════════════════════════════════════════════"
@@ -125,8 +125,10 @@ echo "$LADDER" | while IFS='|' read -r LABEL BASE ADAPTER STEER; do
         --seed_base "$SEED_BASE" \
         --out_dir "$OUT_DIR" \
         --enable_nlp "$ENABLE_NLP" \
-        --tag "${LABEL}${TAG_SUFFIX:+_$TAG_SUFFIX}" || echo "  ! $LABEL FAILED — continuing ladder"
-done
+        --tag "${LABEL}${TAG_SUFFIX:+_$TAG_SUFFIX}" </dev/null || echo "  ! $LABEL FAILED — continuing ladder"
+done <<LADDER_EOF
+$LADDER
+LADDER_EOF
 
 # Build a one-shot scaling summary that flattens every per-policy summary
 python - <<PYEOF
