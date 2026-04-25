@@ -43,24 +43,25 @@ DEFAULT_SYSTEM_PROMPT = textwrap.dedent("""\
     - Seller's opening price is inflated. Negotiate down.
     - Never reveal your budget.
     - Close early at a good price; don't grind for pennies.
+    - The "message" is what you'd actually say to the seller — short Hinglish/English line.
 
     Output schema (pick ONE per turn):
-    {"action": "offer", "price": <number>}
-    {"action": "accept", "price": null}
-    {"action": "walk", "price": null}
+    {"action": "offer", "price": <number>, "message": "<one short line>"}
+    {"action": "accept", "price": null, "message": "<one short line>"}
+    {"action": "walk", "price": null, "message": "<one short line>"}
 
     Examples:
 
     Seller's ask: 100. Your budget: 200.
-    {"action": "offer", "price": 35}
+    {"action": "offer", "price": 35, "message": "yaar 35 max, market mein isse kam mil jaata hai"}
 
     Seller's ask: 45. Your budget: 200.
-    {"action": "accept", "price": null}
+    {"action": "accept", "price": null, "message": "okay deal"}
 
     Seller's ask: 180. Your budget: 200.
-    {"action": "walk", "price": null}
+    {"action": "walk", "price": null, "message": "sorry boss, itna nahi de sakta"}
 
-    Output ONE JSON object. No prose. No markdown. No thinking.
+    Output ONE JSON object. No prose outside JSON. No markdown. No thinking.
 """)
 
 
@@ -164,10 +165,12 @@ def parse_action(text: str, fallback_price: float = 30.0) -> dict[str, Any]:
     try:
         parsed = json.loads(s)
         if parsed.get("action") not in ("offer", "accept", "walk"):
-            return {"action": "offer", "price": fallback_price, "_parse_error": True}
+            return {"action": "offer", "price": fallback_price, "message": "", "_parse_error": True}
+        # Ensure message field exists (older models may not return it)
+        parsed.setdefault("message", "")
         return parsed
     except Exception:
-        return {"action": "offer", "price": fallback_price, "_parse_error": True}
+        return {"action": "offer", "price": fallback_price, "message": "", "_parse_error": True}
 
 
 def steer_bayesian_action(
@@ -186,9 +189,14 @@ def steer_bayesian_action(
     if isinstance(obs, BazaarObservation):
         obs = _obs_to_dict(obs)
 
+    original_action = str(proposed_action.get("action", "offer"))
+    original_price = proposed_action.get("price")
+    original_message = str(proposed_action.get("message") or "")
+
     action = {
-        "action": str(proposed_action.get("action", "offer")),
-        "price": proposed_action.get("price"),
+        "action": original_action,
+        "price": original_price,
+        "message": original_message,
     }
 
     ask = float(obs.get("opponent_last_offer") or obs.get("seller_asking_price") or 0.0)
@@ -196,6 +204,9 @@ def steer_bayesian_action(
     if ask <= 0 or budget <= 0:
         if action["action"] == "offer" and action.get("price") is None:
             action["price"] = round(max(1.0, fallback := budget * 0.3 if budget > 0 else 30.0), 2)
+        if not action.get("message"):
+            from nlp.templates import render
+            action["message"] = render(action["action"], action.get("price"), ask=ask)
         return action
 
     rounds_remaining = int(obs.get("rounds_remaining") or 0)
@@ -295,32 +306,49 @@ def steer_bayesian_action(
     own_last_offer = obs.get("own_last_offer")
     own_last_offer = float(own_last_offer) if own_last_offer is not None else None
 
+    def _finalize(out: dict) -> dict:
+        """Re-message via template if steerer changed action or moved price ≥10%."""
+        new_action = out["action"]
+        new_price = out.get("price")
+        action_changed = new_action != original_action
+        price_changed = (
+            original_price is not None
+            and new_price is not None
+            and abs(float(new_price) - float(original_price)) / max(float(original_price), 1.0) > 0.10
+        )
+        if action_changed or price_changed or not original_message:
+            from nlp.templates import render
+            out["message"] = render(new_action, new_price, ask=ask)
+        else:
+            out["message"] = original_message
+        return out
+
     if action["action"] == "accept":
         if ask > accept_threshold and rounds_remaining > 1:
             action["action"] = "offer"
             action["price"] = round(max(floor_offer, min(ceiling_offer, nash_target)), 2)
         else:
             action["price"] = None
-        return action
+        return _finalize(action)
 
     if action["action"] == "walk":
         if rounds_remaining <= 1 and ask > budget * 0.98:
             action["price"] = None
-            return action
+            return _finalize(action)
         # Anti-premature walk: take one calibrated close attempt first.
         if ask <= accept_threshold and rounds_remaining <= 2:
             action["action"] = "accept"
             action["price"] = None
-            return action
+            return _finalize(action)
         action["action"] = "offer"
         probe_start = own_last_offer if own_last_offer is not None else floor_offer
         probe_price = max(floor_offer, min(ceiling_offer, probe_start + max(1.0, ask * 0.06)))
         action["price"] = round(probe_price, 2)
-        return action
+        return _finalize(action)
 
     # Offer path: clip to Bayesian/Nash band and auto-close late if ask is acceptable.
     if rounds_remaining <= 1 and ask <= accept_threshold:
-        return {"action": "accept", "price": None}
+        return _finalize({"action": "accept", "price": None, "message": ""})
 
     proposed_price = action.get("price")
     if proposed_price is None:
@@ -329,7 +357,7 @@ def steer_bayesian_action(
     steered_price = max(floor_offer, min(ceiling_offer, proposed_price))
     action["price"] = round(steered_price, 2)
     action["action"] = "offer"
-    return action
+    return _finalize(action)
 
 
 class BazaarGymEnv:
