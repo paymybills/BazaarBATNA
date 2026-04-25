@@ -1,61 +1,82 @@
-"""Mined buyer-message templates from the 500 Hinglish synthetic conversations.
+"""Buyer-message templates for SFT targets and steerer-override fallback.
 
-Used as a fallback when the Bayesian steerer overrides the LLM's price — the original
-message is no longer defending the right number, so we swap in a templated line that
-matches the new action and direction.
-
-Buckets keyed by (action_kind, intent):
+Templates are bucketed by:
   action_kind ∈ {offer_low, offer_mid, offer_high, accept, walk}
-  intent      ∈ {firm, soft, friendly} — derived from how the model framed it
+  register    ∈ {firm, soft, polite, curt, final}  — escalating tone
 
-Templates use {price} as the slot. e.g. "yaar {price} max, market mein isse kam mil jaata hai".
+Use the `turn_index` in render() to bias toward `final` register on later turns
+(round-aware escalation: opening turns sound exploratory, late turns sound terminal).
+
+The bank avoids "yaar" (informal/casual filler) and over-uses of "bhai" — keeps the
+buyer's voice grounded in Hinglish-leaning English without sounding like a street vendor.
 """
 
 import random
 from typing import Optional
 
-# Templates curated/mined from data/indian_negotiations.jsonl turns.
-# Each entry is: (intent, template). All templates have a {price} slot for offers.
+# Each entry: (register, template). All offer templates have {price}.
 TEMPLATES: dict[str, list[tuple[str, str]]] = {
     "offer_low": [
-        ("firm",     "yaar {price} max de sakta hu, isse zyada nahi"),
-        ("firm",     "{price} hai mera offer, final"),
-        ("firm",     "sorry boss, {price} se zyada nahi"),
-        ("soft",     "thoda kam karo, {price} kar do"),
-        ("soft",     "{price} mein de do na bhai"),
-        ("friendly", "dekho yaar, {price} fair lagta hai mujhe"),
-        ("friendly", "market mein {price} mein mil jaata hai, please consider"),
+        ("firm",   "{price} is what I can do, not higher"),
+        ("firm",   "max I can pay is {price}"),
+        ("firm",   "{price} hai mera offer, please consider"),
+        ("soft",   "would you take {price}?"),
+        ("soft",   "{price} mein de dijiye, please"),
+        ("polite", "I checked the market, {price} feels fair to me"),
+        ("polite", "honestly, {price} is what comparable listings go for"),
+        ("curt",   "{price}. take it or leave it"),
+        ("curt",   "{price}, final from my side"),
+        ("final",  "okay, {price} is my final offer"),
+        ("final",  "{price} last and final, beyond this I walk"),
     ],
     "offer_mid": [
-        ("firm",     "{price} pe karte hain deal, that's it"),
-        ("firm",     "okay, {price} max"),
-        ("soft",     "chalo {price} pe baat karte hain"),
-        ("soft",     "{price} fair hai dono ke liye"),
-        ("friendly", "{price} pe finalize karein? thoda thoda dono adjust karte hain"),
-        ("friendly", "yaar {price} pe close kar dete hain"),
+        ("firm",   "let's settle at {price}"),
+        ("firm",   "{price} works for me"),
+        ("firm",   "{price} pe karte hain"),
+        ("soft",   "how about {price}?"),
+        ("soft",   "{price} chalega?"),
+        ("polite", "I think {price} is reasonable for the condition"),
+        ("polite", "given what you described, {price} seems balanced"),
+        ("curt",   "{price}. that's where I am"),
+        ("curt",   "{price}, no more"),
+        ("final",  "{price} or I'm out"),
+        ("final",  "this is my last move — {price}"),
     ],
     "offer_high": [
-        ("firm",     "okay, {price} ye mera last offer"),
-        ("firm",     "{price}, isse upar nahi ja sakta"),
-        ("soft",     "{price} de raha hu, deal kar lo"),
-        ("friendly", "{price} pe deal lock karein?"),
-        ("friendly", "okay yaar, {price} mein le leta hu"),
+        ("firm",   "alright, {price} but that's the limit"),
+        ("firm",   "{price}, can't push higher"),
+        ("soft",   "{price} okay? closing this out"),
+        ("soft",   "fine, {price} mein le leta hu"),
+        ("polite", "I'll stretch to {price} since you've been reasonable"),
+        ("polite", "you've been fair, I can do {price}"),
+        ("curt",   "{price}. done?"),
+        ("curt",   "{price}, last bid"),
+        ("final",  "okay {price} — that's truly the ceiling"),
+        ("final",  "{price} and we close, otherwise I walk"),
     ],
     "accept": [
-        ("firm",     "deal."),
-        ("firm",     "done."),
-        ("soft",     "okay, deal kar lete hain"),
-        ("soft",     "theek hai, le leta hu"),
-        ("friendly", "perfect, done deal"),
-        ("friendly", "haan yaar, le leta hu"),
+        ("firm",   "deal."),
+        ("firm",   "done."),
+        ("soft",   "okay, that works"),
+        ("soft",   "alright, let's do it"),
+        ("polite", "fair enough, accepted"),
+        ("polite", "sounds reasonable, deal"),
+        ("curt",   "yes."),
+        ("curt",   "agreed."),
+        ("final",  "deal, let's close it"),
+        ("final",  "okay closing at this"),
     ],
     "walk": [
-        ("firm",     "sorry boss, itna nahi de sakta"),
-        ("firm",     "nahi yaar, ye nahi ho payega"),
-        ("soft",     "thoda zyada hai, dekhte hain phir kabhi"),
-        ("soft",     "abhi nahi le sakta, thanks"),
-        ("friendly", "sorry yaar, budget se bahar hai"),
-        ("friendly", "dekhte hain, thanks for your time"),
+        ("firm",   "can't make it work, passing"),
+        ("firm",   "this isn't going to fit my budget"),
+        ("soft",   "thanks for your time, will look elsewhere"),
+        ("soft",   "appreciate it, but not at this price"),
+        ("polite", "the gap is too big, I'll have to pass"),
+        ("polite", "I respect your floor, but it doesn't work for me"),
+        ("curt",   "no deal."),
+        ("curt",   "passing, thanks"),
+        ("final",  "we're too far apart — walking"),
+        ("final",  "not at this price, goodbye"),
     ],
 }
 
@@ -72,24 +93,47 @@ def _bucket_for_offer(price: float, ask: float) -> str:
     return "offer_high"
 
 
+def _register_for_turn(turn_index: int, max_turns: int = 8) -> Optional[str]:
+    """Bias register based on turn position.
+
+    - Turns 0-1 (opening): polite or soft
+    - Turns 2-4 (mid):     firm or soft
+    - Turns 5+  (late):    curt or final
+    """
+    if turn_index < 0:
+        return None
+    progress = turn_index / max(1, max_turns)
+    if progress < 0.25:
+        return random.choice(["polite", "soft"])
+    if progress < 0.65:
+        return random.choice(["firm", "soft"])
+    return random.choice(["curt", "final"])
+
+
 def render(
     action: str,
     price: Optional[float],
     ask: Optional[float] = None,
     intent: Optional[str] = None,
+    turn_index: Optional[int] = None,
+    max_turns: int = 8,
+    used_history: Optional[set[str]] = None,
     rng: Optional[random.Random] = None,
 ) -> str:
-    """Pick a template and render it with the given price.
+    """Pick a template, render it with the given price, avoid recent repeats.
 
     Args:
         action: 'offer' | 'accept' | 'walk'
-        price: numeric price for offers; ignored for accept/walk
-        ask: seller's current ask, used to bucket offer price
-        intent: 'firm' | 'soft' | 'friendly'; if None, picks randomly
+        price: numeric price for offers; None for accept/walk
+        ask: seller's current ask (used to bucket offer price)
+        intent: explicit register override ('firm'|'soft'|'polite'|'curt'|'final')
+        turn_index: current round number — biases register toward 'final' as it grows
+        max_turns: typical episode length used for normalizing turn_index
+        used_history: set of templates already rendered this episode (avoid repeats)
         rng: optional Random instance for reproducibility
 
     Returns:
-        A natural-language line.
+        A natural-language line, with {price} slot filled.
     """
     rng = rng or random
     if action == "offer":
@@ -102,13 +146,35 @@ def render(
         return ""
 
     candidates = TEMPLATES.get(bucket, [])
-    if intent:
-        filtered = [(i, t) for i, t in candidates if i == intent]
-        if filtered:
-            candidates = filtered
     if not candidates:
         return ""
-    _, tmpl = rng.choice(candidates)
-    if "{price}" in tmpl and price is not None:
-        return tmpl.format(price=int(round(price)))
-    return tmpl
+
+    # Determine register: explicit > turn-based > random
+    register = intent or (
+        _register_for_turn(turn_index, max_turns) if turn_index is not None else None
+    )
+
+    register_pool = [(r, t) for r, t in candidates if r == register] if register else list(candidates)
+    if not register_pool:
+        register_pool = list(candidates)
+
+    def _materialize(tmpl: str) -> str:
+        if "{price}" in tmpl and price is not None:
+            return tmpl.format(price=int(round(price)))
+        return tmpl
+
+    # `used_history` stores rendered messages, so compare against the materialized form.
+    # Variety > register fidelity when buyer is stuck — widen to all registers
+    # before allowing repeats.
+    if used_history:
+        fresh_in_register = [(r, t) for r, t in register_pool if _materialize(t) not in used_history]
+        if fresh_in_register:
+            pool = fresh_in_register
+        else:
+            fresh_anywhere = [(r, t) for r, t in candidates if _materialize(t) not in used_history]
+            pool = fresh_anywhere or register_pool
+    else:
+        pool = register_pool
+
+    _, tmpl = rng.choice(pool)
+    return _materialize(tmpl)

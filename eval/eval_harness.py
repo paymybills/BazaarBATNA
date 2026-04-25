@@ -48,19 +48,23 @@ def rule_based_policy(obs: dict) -> dict:
     ask    = obs.get("seller_asking_price") or obs.get("opponent_last_offer") or 100
     budget = obs.get("own_private_budget") or 100
     rnd    = obs.get("current_round") or 0
+    max_r  = obs.get("max_rounds") or 8
     last   = obs.get("own_last_offer")
 
     if ask <= budget * 0.5:
-        return {"action": "accept", "price": None, "message": render("accept", None)}
+        return {"action": "accept", "price": None,
+                "message": render("accept", None, turn_index=rnd, max_turns=max_r)}
     if ask > budget:
-        return {"action": "walk", "price": None, "message": render("walk", None)}
+        return {"action": "walk", "price": None,
+                "message": render("walk", None, turn_index=rnd, max_turns=max_r)}
     if rnd == 0 or last is None:
         price = ask * random.uniform(0.25, 0.40)
     else:
         price = last + (ask - last) * random.uniform(0.2, 0.35)
     price = max(1.0, min(price, budget * 0.8))
     price = round(price, 2)
-    return {"action": "offer", "price": price, "message": render("offer", price, ask=ask)}
+    return {"action": "offer", "price": price,
+            "message": render("offer", price, ask=ask, turn_index=rnd, max_turns=max_r)}
 
 
 def make_ollama_policy(

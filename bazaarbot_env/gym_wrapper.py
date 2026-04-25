@@ -201,12 +201,17 @@ def steer_bayesian_action(
 
     ask = float(obs.get("opponent_last_offer") or obs.get("seller_asking_price") or 0.0)
     budget = float(obs.get("own_private_budget") or 0.0)
+    turn_index_early = int(obs.get("current_round") or 0)
+    max_rounds_early = int(obs.get("max_rounds") or 8)
     if ask <= 0 or budget <= 0:
         if action["action"] == "offer" and action.get("price") is None:
             action["price"] = round(max(1.0, fallback := budget * 0.3 if budget > 0 else 30.0), 2)
         if not action.get("message"):
             from nlp.templates import render
-            action["message"] = render(action["action"], action.get("price"), ask=ask)
+            action["message"] = render(
+                action["action"], action.get("price"),
+                ask=ask, turn_index=turn_index_early, max_turns=max_rounds_early,
+            )
         return action
 
     rounds_remaining = int(obs.get("rounds_remaining") or 0)
@@ -318,7 +323,10 @@ def steer_bayesian_action(
         )
         if action_changed or price_changed or not original_message:
             from nlp.templates import render
-            out["message"] = render(new_action, new_price, ask=ask)
+            out["message"] = render(
+                new_action, new_price,
+                ask=ask, turn_index=current_round, max_turns=max_rounds,
+            )
         else:
             out["message"] = original_message
         return out
