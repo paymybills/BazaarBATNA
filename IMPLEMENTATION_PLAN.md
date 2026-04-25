@@ -196,6 +196,101 @@ gap), so we either stay small and iterate or go big and commit. We do both.
 
 ---
 
+## 📌 PINNED: DPO pipeline (scaffolded, ready to fire)
+
+Third training stage on top of v2 SFT+GRPO. Files committed at `08e7c4d`:
+
+- `eval/judge.py` — Claude-as-judge (Anthropic API) picks `chosen` vs `rejected` from
+  pairs of buyer rollouts on the same scenario. Heuristic fallback (compares
+  `buyer_share`) if `ANTHROPIC_API_KEY` is missing — that's RLAIF, not RLHF, but
+  the standard approach in current literature.
+- `eval/build_dpo_pairs.py` — samples N scenarios, runs two rollouts per scenario
+  (different rng seeds for behavioural divergence), runs the judge, writes
+  `data/dpo_pairs.jsonl`.
+- `training/dpo_colab.ipynb` — `trl.DPOTrainer` on top of v2 adapter
+  (`PayMyBills/bestdealbot-v2`), pushes result to `PayMyBills/bestdealbot-v3-dpo`.
+
+### Tomorrow firing sequence
+
+```bash
+# 1. Build pairs locally (~10 min, ~$2 of Anthropic credits if API key set)
+ANTHROPIC_API_KEY=sk-... PYTHONPATH=. python eval/build_dpo_pairs.py --n 100
+
+# 2. Upload data/dpo_pairs.jsonl to Colab (or have cell 3 pull via fresh repo clone)
+
+# 3. Open training/dpo_colab.ipynb in Colab → Run All
+#    ~15-20 min training, pushes to HF
+```
+
+Skip the Anthropic API entirely if you want — the heuristic fallback ranks pairs
+on `buyer_share`, decent enough for a hackathon DPO demonstration.
+
+### Why this matters for the venue
+
+For code-judge audiences, having a working DPO stage is a real claim:
+*"third training stage built on preference learning"*. Even a thin DPO run on
+50-100 pairs gives a defensible "we used preference optimization" line in the
+README, with concrete artifacts: judge transcripts, pair JSONL, training logs,
+final adapter on HF.
+
+### Honest framing
+
+This is **RLAIF** (preferences from an LLM judge), not classical **RLHF**
+(preferences from human labelers). Almost all open-source "RLHF" papers since
+2023 are RLAIF. Document this in the README so judges who care about the
+distinction don't think we're overclaiming.
+
+---
+
+## 📌 PINNED: Reputation / career mode (already built, undersold)
+
+`bazaarbot_env` already implements reputation tracking — discovered while
+auditing the codebase, not yet leaned into in the venue narrative.
+
+### What's there
+
+- `CareerHistory` dataclass: tracks past deals, computes `capitulation_rate`,
+  `avg_normalized_surplus`, `avg_rounds_to_close` over a sliding window.
+- Reward shaping: `rep_leak = -0.1 * capitulation_rate` once 3+ deals are done.
+  Penalises the agent for being a soft touch repeatedly.
+- Seller awareness: `seller.update_career_info(cap_rate)` is called between
+  episodes — the rule-based seller actually adjusts strategy based on the
+  buyer's history (anchors higher against capitulators).
+- Task gating: only `career_10` (10-episode arc) enables this via
+  `task.enable_career`.
+
+### What's missing
+
+- **No buyer-side awareness in the prompt.** The buyer LLM doesn't see its own
+  capitulation rate. So the agent can't strategically vary behaviour to manage
+  its reputation — it's purely a reward signal at the env level. Quick fix:
+  inject `career_history` summary into `format_observation()` (already partially
+  done — there's a `career_info` block in the prompt).
+- **Only one task uses it.** `career_10` is the only suite. Adding `career_5` or
+  using career mode in `amazon_realistic` would give the reputation feature
+  more eval surface.
+- **No headline number.** "Bestdealbot's mean surplus *increases* across a
+  10-episode career" would be a real claim. Currently the eval reports per-task
+  means without showing the within-career trajectory.
+
+### Venue play
+
+Cheap polish for the README: pull `career_10` per-episode trajectory data,
+plot or table-ify `episode_n surplus`. If the agent improves over the arc, that's
+a "learns from its reputation" claim. ~30 min of analysis on existing eval data.
+
+If buyer-side awareness in the prompt is added (~1hr), claim becomes:
+*"Buyer agent reads its own career history, adjusts negotiation aggressiveness
+to manage reputation across episodes."*
+
+### Out of scope for venue
+
+- Building reputation tracking for the **seller** side
+- Extending career mode to additional task suites
+- Multi-agent reputation (only `arena` would need this, deferred)
+
+---
+
 ## 📌 PINNED: Future work (not for venue)
 
 Items that are good ideas but explicitly out of scope. Pin here so they don't get lost,
