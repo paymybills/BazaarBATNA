@@ -12,10 +12,12 @@ pinned: false
 
 BazaarBATNA is an OpenEnv-compliant negotiation project with two deliverables:
 
-1. **BazaarBATNA Platform**: the environment, API server, tasks, UI, replay/arena systems.
-2. **BazaarBot Agent**: the trained buyer model and its inference/evaluation pipeline.
+1. **BazaarBATNA Platform** — the environment, API server, tasks, UI, replay/arena systems.
+2. **Sauda Agent** (the buyer, also known as `bestdealbot` on HF) — trained buyer model and its inference/evaluation pipeline.
 
 ## Headline results
+
+### Buyer surplus (n=20 per task)
 
 | Policy | amazon_realistic | read_the_tells | career_10 | deal rate |
 |---|---:|---:|---:|---:|
@@ -23,11 +25,25 @@ BazaarBATNA is an OpenEnv-compliant negotiation project with two deliverables:
 | `baseline:llama3.2:3b` | 0.234 | 0.308 | 0.705 | 100 / 65 / 100 |
 | **`ollama:bestdealbot`** | **0.913** | **0.418** | **0.972** | **100 / 100 / 100** |
 
-n=20 per task. Mean normalized surplus on [0, 1]. Bestdealbot wins every task and closes 100% of deals.
+Mean normalized surplus on [0, 1]. Bestdealbot wins every task and closes 100% of deals.
 
-- **+131%** vs rule-based on `amazon_realistic`
-- **+916%** vs rule-based on `read_the_tells` (the tells-heavy suite)
-- Stack runs in ~7 GB VRAM (RTX 2050 class)
+### Symmetric scoring (who outplayed whom)
+
+| Policy | buyer_share | win rate | mutual_loss | rounds |
+|---|---:|---:|---:|---:|
+| `baseline:llama3.2:3b` | 0.471 | 33% | 12% | 2.0 |
+| `rule_based` | 0.621 | 37% | 33% | 3.2 |
+| **`ollama:bestdealbot`** | **0.767** | **67%** | **0%** | 5.8 |
+
+`buyer_share` ∈ [0, 1] = fraction of bargaining surplus the buyer captured. `mutual_loss` = how often the agent walked away from a winnable deal. **Bestdealbot fails to close zero winnable deals.**
+
+### Headlines
+
+- **+131%** surplus vs rule-based on `amazon_realistic`
+- **+916%** surplus vs rule-based on `read_the_tells` (tells-heavy suite)
+- **0% mutual-loss rate** — never walks away from a winnable deal
+- **77%** mean fraction of bargaining surplus captured
+- Local stack runs in ~7 GB VRAM (RTX 2050 class)
 
 See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for full transcripts. Sister landing-page repo: [paymybills/Sauda](https://github.com/paymybills/Sauda).
 
