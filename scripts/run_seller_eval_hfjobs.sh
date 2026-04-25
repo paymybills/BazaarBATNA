@@ -43,7 +43,8 @@ pip install -q --no-cache-dir \
     "bitsandbytes>=0.44" \
     "datasets>=3.0" \
     "sentencepiece>=0.2" \
-    "requests>=2.31"
+    "requests>=2.31" \
+    "pydantic>=2.0"
 
 git clone --depth 1 https://github.com/paymybills/BazaarBATNA.git /workspace/repo
 cd /workspace/repo
