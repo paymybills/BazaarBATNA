@@ -19,7 +19,10 @@ set -eo pipefail
 
 FLAVOR="${FLAVOR:-a10g-large}"
 N_PAIRS="${N_PAIRS:-100}"
-BUYER_MODEL="${BUYER_MODEL:-PayMyBills/bestdealbot-v2}"
+BUYER_BASE="${BUYER_BASE:-meta-llama/Llama-3.1-8B-Instruct}"
+BUYER_ADAPTER="${BUYER_ADAPTER:-PayMyBills/bestdealbot-v2}"
+TEMP_A="${TEMP_A:-0.5}"
+TEMP_B="${TEMP_B:-0.9}"
 SELLER_MODEL="${SELLER_MODEL:-google/gemma-4-E4B}"
 SFT_HF_REPO="${SFT_HF_REPO:-PayMyBills/bestdealbot-v2}"
 REPO_ID="${REPO_ID:-PayMyBills/bestdealbot-v3-dpo}"
@@ -102,8 +105,11 @@ PYEOF
 else
     echo "Building $N_PAIRS DPO pairs (judge: Claude-as-judge if ANTHROPIC_API_KEY set, else heuristic)"
     PYTHONPATH=. python -u eval/build_dpo_pairs.py \
-        --buyer-model "$BUYER_MODEL" \
+        --buyer-base "$BUYER_BASE" \
+        --buyer-adapter "$BUYER_ADAPTER" \
         --seller-model "$SELLER_MODEL" \
+        --temp-a "$TEMP_A" \
+        --temp-b "$TEMP_B" \
         --n "$N_PAIRS" \
         --out data/dpo_pairs.jsonl
     # Mirror the pairs to a dataset repo so future runs can SKIP_PAIR_BUILD=1
@@ -155,13 +161,15 @@ echo "DONE"
 CONTAINER_SCRIPT
 
 echo "Submitting DPO HF Job:"
-echo "  flavor:        $FLAVOR"
-echo "  image:         $IMAGE"
-echo "  base buyer:    $BUYER_MODEL"
-echo "  seller:        $SELLER_MODEL"
-echo "  start adapter: $SFT_HF_REPO"
-echo "  push to:       $REPO_ID"
-echo "  pairs target:  $N_PAIRS  (skip_build=$SKIP_PAIR_BUILD)"
+echo "  flavor:         $FLAVOR"
+echo "  image:          $IMAGE"
+echo "  buyer base:     $BUYER_BASE"
+echo "  buyer adapter:  $BUYER_ADAPTER"
+echo "  buyer temps:    $TEMP_A vs $TEMP_B"
+echo "  seller:         $SELLER_MODEL"
+echo "  start adapter:  $SFT_HF_REPO"
+echo "  push to:        $REPO_ID"
+echo "  pairs target:   $N_PAIRS  (skip_build=$SKIP_PAIR_BUILD)"
 echo "  beta=$BETA  lr=$LR  epochs=$EPOCHS"
 echo
 
@@ -176,7 +184,10 @@ hf jobs run \
     --flavor "$FLAVOR" \
     --timeout "$TIMEOUT" \
     --secrets HF_TOKEN \
-    -e BUYER_MODEL="$BUYER_MODEL" \
+    -e BUYER_BASE="$BUYER_BASE" \
+    -e BUYER_ADAPTER="$BUYER_ADAPTER" \
+    -e TEMP_A="$TEMP_A" \
+    -e TEMP_B="$TEMP_B" \
     -e SELLER_MODEL="$SELLER_MODEL" \
     -e SFT_HF_REPO="$SFT_HF_REPO" \
     -e REPO_ID="$REPO_ID" \
