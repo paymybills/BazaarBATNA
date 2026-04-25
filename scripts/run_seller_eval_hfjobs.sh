@@ -21,7 +21,7 @@ SPLIT="${SPLIT:-dev}"
 MODEL="${MODEL:-google/gemma-4-E4B}"
 RESULTS_REPO="${RESULTS_REPO:-PayMyBills/seller-quality-runs}"
 TIMEOUT="${TIMEOUT:-1h}"
-IMAGE="${IMAGE:-pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime}"
+IMAGE="${IMAGE:-python:3.11-slim}"
 
 DETACH="-d"
 if [ "${1:-}" = "--foreground" ]; then
@@ -37,6 +37,7 @@ set -eux
 apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null
 
 pip install -q --no-cache-dir \
+    "torch>=2.4" \
     "huggingface_hub>=0.30" \
     "transformers>=4.46" \
     "accelerate>=1.1" \
