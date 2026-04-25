@@ -55,7 +55,7 @@ export default function ReplayPage() {
     try {
       const s = await apiGet<EnvironmentState>("/state");
       setState(s);
-      setReplayStep(s.offer_history.length);
+      setReplayStep(s?.offer_history?.length ?? 0);
       setError(null);
     } catch {
       setError("No active session. Run a simulation or play a round first.");
@@ -66,8 +66,8 @@ export default function ReplayPage() {
     loadState();
   }, [loadState]);
 
-  const totalSteps = state?.offer_history.length ?? 0;
-  const visibleHistory = state?.offer_history.slice(0, replayStep + 1) ?? [];
+  const totalSteps = state?.offer_history?.length ?? 0;
+  const visibleHistory = state?.offer_history?.slice(0, replayStep + 1) ?? [];
   const currentRound =
     visibleHistory.length > 0
       ? visibleHistory[visibleHistory.length - 1].round
@@ -112,8 +112,8 @@ export default function ReplayPage() {
     }
   };
 
-  const currentTell = state?.tells_history[Math.max(0, replayStep - 1)] ?? null;
-  const dealEntry = state?.offer_history.find((h) => h.action === "accept");
+  const currentTell = state?.tells_history?.[Math.max(0, replayStep - 1)] ?? null;
+  const dealEntry = state?.offer_history?.find((h) => h.action === "accept");
   const dealPrice = dealEntry?.price ?? null;
 
   return (
