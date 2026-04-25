@@ -2,7 +2,29 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiPost } from "../lib/api";
-import { Send, Loader2, Keyboard, RefreshCw } from "lucide-react";
+import { Send, Loader2, Keyboard, RefreshCw, Brain } from "lucide-react";
+
+/* ── Highlight types ───────────────────────────────────── */
+interface HighlightSpan {
+  start: number;
+  end: number;
+  text: string;
+  signal: "urgency" | "deception" | "confidence" | "condition";
+  score: number;
+  explanation: string;
+}
+
+interface HighlightResponse {
+  spans: HighlightSpan[];
+  aggregate: Record<string, number>;
+}
+
+const SIGNAL_COLOR: Record<string, string> = {
+  urgency: "var(--warn)",
+  deception: "var(--bad)",
+  confidence: "var(--accent-2)",
+  condition: "var(--good)",
+};
 
 /* ── Types ─────────────────────────────────────────────── */
 interface HistoryEntry {
@@ -217,6 +239,92 @@ function makeTickerMessage(round: number, listed: number): string {
   return variants[round % variants.length];
 }
 
+/* ── Highlighted bubble: marks spans on the message ─────── */
+function HighlightedText({
+  text,
+  spans,
+}: {
+  text: string;
+  spans: HighlightSpan[];
+}) {
+  if (!spans || spans.length === 0) return <>{text}</>;
+
+  // Resolve overlapping spans: keep highest score per char position
+  const claimed = new Array<HighlightSpan | null>(text.length).fill(null);
+  for (const s of [...spans].sort((a, b) => b.score - a.score)) {
+    for (let i = s.start; i < s.end && i < text.length; i++) {
+      if (claimed[i] === null) claimed[i] = s;
+    }
+  }
+
+  // Build runs of consecutive same-span (or null) chars
+  type Run = { start: number; end: number; span: HighlightSpan | null };
+  const runs: Run[] = [];
+  let cur: Run | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const span = claimed[i];
+    if (cur && cur.span === span) {
+      cur.end = i + 1;
+    } else {
+      if (cur) runs.push(cur);
+      cur = { start: i, end: i + 1, span };
+    }
+  }
+  if (cur) runs.push(cur);
+
+  return (
+    <>
+      {runs.map((r, i) => {
+        const slice = text.slice(r.start, r.end);
+        if (r.span === null) return <span key={i}>{slice}</span>;
+        const color = SIGNAL_COLOR[r.span.signal] || "var(--accent)";
+        return (
+          <mark
+            key={i}
+            title={`${r.span.signal} ${r.span.score.toFixed(2)} — ${r.span.explanation}`}
+            className="group relative cursor-help bg-transparent"
+            style={{
+              borderBottom: `2px solid ${color}`,
+              padding: "0 1px",
+              color: "inherit",
+            }}
+          >
+            {slice}
+          </mark>
+        );
+      })}
+    </>
+  );
+}
+
+/* ── Thinking beat: 3-step animation while buyer responds ── */
+function ThinkingBeat({ stage }: { stage: 0 | 1 | 2 | 3 }) {
+  const stages = [
+    "Reading your message…",
+    "Extracting tells (urgency, deception, condition)…",
+    "Running Bayesian posterior over flexibility…",
+    "Choosing offer + reply…",
+  ];
+  return (
+    <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 flex items-start gap-3">
+      <Brain size={16} className="text-accent shrink-0 mt-0.5 animate-pulse" />
+      <div className="flex-1 space-y-1">
+        {stages.slice(0, stage + 1).map((s, i) => (
+          <div
+            key={i}
+            className={`text-sm transition-opacity ${
+              i === stage ? "text-foreground" : "text-fg3"
+            }`}
+          >
+            {i === stage ? "→ " : "✓ "}
+            {s}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ─────────────────────────────────────────── */
 export default function SellPage() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -224,7 +332,7 @@ export default function SellPage() {
   const [brief, setBrief] = useState<RoleBrief | null>(null);
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [messages, setMessages] = useState<Array<{ text: string; type: string }>>([]);
+  const [messages, setMessages] = useState<Array<{ text: string; type: string; highlights?: HighlightSpan[] }>>([]);
   const [tickerMessages, setTickerMessages] = useState<string[]>([]);
   const [lastBuyerOffer, setLastBuyerOffer] = useState<number | null>(null);
   const [counterPrice, setCounterPrice] = useState(0);
@@ -232,6 +340,7 @@ export default function SellPage() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [thinkingStage, setThinkingStage] = useState<0 | 1 | 2 | 3 | -1>(-1);
   const [currentTells, setCurrentTells] = useState<TellSignal[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -317,11 +426,31 @@ export default function SellPage() {
   }, [brief, currentListing]);
 
   const submitCounter = useCallback(
-    async (price: number) => {
+    async (price: number, sellerText?: string) => {
       if (done || !brief) return;
       setLoading(true);
+      const messageText = sellerText && sellerText.trim()
+        ? sellerText.trim()
+        : `Counter at $${price}.`;
+
+      // Push seller bubble immediately (no highlights yet)
+      setMessages((m) => [...m, { text: messageText, type: "seller" }]);
+
+      // Stage the thinking beat: 0 → 1 → 2 → 3 over ~1.6s while we fetch
+      setThinkingStage(0);
+      const beatTimers = [
+        setTimeout(() => setThinkingStage(1), 350),
+        setTimeout(() => setThinkingStage(2), 800),
+        setTimeout(() => setThinkingStage(3), 1300),
+      ];
+
       try {
-        const res = await apiPost<{
+        // Kick off both calls in parallel
+        const highlightPromise = apiPost<HighlightResponse>("/highlight", {
+          message: messageText,
+        }).catch(() => ({ spans: [], aggregate: {} } as HighlightResponse));
+
+        const stepPromise = apiPost<{
           round: number;
           message: string;
           buyer_action: string;
@@ -334,12 +463,23 @@ export default function SellPage() {
           history: HistoryEntry[];
         }>("/seller-mode/step", { price });
 
+        const [highlightRes, res] = await Promise.all([highlightPromise, stepPromise]);
+
+        // Backfill the seller bubble with highlights, then push buyer reply
+        setMessages((m) => {
+          const next = [...m];
+          // The seller bubble we just pushed is the last "seller" entry
+          for (let i = next.length - 1; i >= 0; i--) {
+            if (next[i].type === "seller") {
+              next[i] = { ...next[i], highlights: highlightRes.spans };
+              break;
+            }
+          }
+          next.push({ text: res.message, type: "buyer" });
+          return next;
+        });
+
         setHistory(res.history);
-        setMessages((m) => [
-          ...m,
-          { text: `You counter at $${price}.`, type: "seller" },
-          { text: res.message, type: "buyer" },
-        ]);
 
         // Inject pressure ticker message every 2 rounds
         if (res.round % 2 === 0 && currentListing && !res.done) {
@@ -353,7 +493,18 @@ export default function SellPage() {
           }
         }
 
-        setCurrentTells(generateTells(res.round, res.buyer_price));
+        // Hydrate the tells panel from the real /highlight aggregate when available
+        const agg = highlightRes.aggregate || {};
+        const realTells: TellSignal[] = [
+          { key: "urgency", label: "Urgency", value: agg.urgency ?? 0, group: "verbal" },
+          { key: "deception", label: "Deception", value: agg.deception ?? 0, group: "verbal" },
+          { key: "confidence", label: "Confidence", value: agg.confidence ?? 0, group: "verbal" },
+          { key: "condition", label: "Condition", value: agg.condition ?? 0, group: "condition" },
+          // Behavioral signals stay synthetic — labelled honestly
+          ...generateTells(res.round, res.buyer_price)
+            .filter((t) => t.group === "behavioral"),
+        ];
+        setCurrentTells(realTells);
 
         if (res.done) {
           setDone(true);
@@ -361,8 +512,11 @@ export default function SellPage() {
         }
       } catch (e) {
         setMessages((m) => [...m, { text: `Error: ${e}`, type: "error" }]);
+      } finally {
+        beatTimers.forEach(clearTimeout);
+        setThinkingStage(-1);
+        setLoading(false);
       }
-      setLoading(false);
     },
     [done, brief, currentListing]
   );
@@ -496,17 +650,43 @@ export default function SellPage() {
                             : "text-fg3 text-xs italic"
                         }`}
                       >
-                        {m.text}
+                        {isSeller && m.highlights ? (
+                          <HighlightedText text={m.text} spans={m.highlights} />
+                        ) : (
+                          m.text
+                        )}
                       </div>
                     </div>
                   );
                 })}
+                {thinkingStage >= 0 && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] w-full">
+                      <ThinkingBeat stage={thinkingStage as 0 | 1 | 2 | 3} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Counter input */}
             {!done && (
-              <div className="rounded-xl border border-border bg-surface p-6">
+              <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+                {/* Free-text message: what makes the highlighting actually mark something */}
+                <div>
+                  <label className="text-eyebrow block mb-2">
+                    Say something (Sauda will read it for tells)
+                  </label>
+                  <SellerTextInput
+                    counterPrice={counterPrice}
+                    onSubmit={(text) => submitCounter(counterPrice, text)}
+                    disabled={loading}
+                  />
+                  <div className="text-meta mt-2">
+                    Try: <span className="text-foreground/70">&quot;last price hai bhai, teen aur log dekh rahe&quot;</span>
+                    {" "}— Sauda will underline the urgency and deception cues it picks up.
+                  </div>
+                </div>
                 <div className="grid md:grid-cols-[1fr_auto] gap-6 items-end">
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -534,7 +714,7 @@ export default function SellPage() {
                       disabled={loading}
                       className="inline-flex items-center justify-center gap-2 rounded-md bg-accent text-background px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                     >
-                      <Send size={14} /> Counter
+                      <Send size={14} /> Counter (price only)
                     </button>
                     <button
                       onClick={() => lastBuyerOffer && submitCounter(lastBuyerOffer)}
@@ -614,6 +794,52 @@ function ResultStat({ label, value, tone = "default" }: { label: string; value: 
     <div className="rounded-lg border border-border bg-surface-2 p-4">
       <div className="text-eyebrow mb-2">{label}</div>
       <div className={`text-2xl font-mono font-medium tabular-nums ${colorClass}`}>{value}</div>
+    </div>
+  );
+}
+
+/* ── Seller text input: type Hinglish/English, hit send ──── */
+function SellerTextInput({
+  counterPrice,
+  onSubmit,
+  disabled,
+}: {
+  counterPrice: number;
+  onSubmit: (text: string) => void;
+  disabled: boolean;
+}) {
+  const [text, setText] = useState("");
+
+  const send = () => {
+    const t = text.trim();
+    if (!t || disabled) return;
+    onSubmit(t);
+    setText("");
+  };
+
+  return (
+    <div className="flex gap-2">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        rows={2}
+        placeholder={`e.g. "${counterPrice} is final, last price hai"`}
+        className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-fg3 focus:border-accent outline-none transition-colors resize-none font-mono"
+        disabled={disabled}
+      />
+      <button
+        onClick={send}
+        disabled={disabled || !text.trim()}
+        className="self-stretch inline-flex items-center justify-center gap-2 rounded-md bg-accent text-background px-4 text-sm font-medium hover:opacity-90 disabled:opacity-30 transition-opacity"
+      >
+        <Send size={14} /> Send
+      </button>
     </div>
   );
 }
