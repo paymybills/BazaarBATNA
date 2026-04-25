@@ -27,6 +27,9 @@ IMAGE="${IMAGE:-python:3.11-slim}"
 # SELLER_MODEL when the task is configured; we set that env-var inside the
 # container. Default = the same Gemma we ran in seller_quality.
 SELLER_MODEL="${SELLER_MODEL:-google/gemma-4-E4B}"
+# Ablation knobs (forwarded to eval/eval_harness.py)
+ENABLE_NLP="${ENABLE_NLP:-0}"          # 1 = route seller msgs through ministral NLP extractor
+TAG_SUFFIX="${TAG_SUFFIX:-}"           # extra filename suffix, e.g. tells_on / tells_off
 
 # LADDER format, one row per line: LABEL|BASE|ADAPTER|STEER
 # - LABEL:   short tag for filenames/summary
@@ -120,7 +123,8 @@ echo "$LADDER" | while IFS='|' read -r LABEL BASE ADAPTER STEER; do
         --tasks $TASKS \
         --seed_base "$SEED_BASE" \
         --out_dir "$OUT_DIR" \
-        --tag "$LABEL" || echo "  ! $LABEL FAILED — continuing ladder"
+        --enable_nlp "$ENABLE_NLP" \
+        --tag "${LABEL}${TAG_SUFFIX:+_$TAG_SUFFIX}" || echo "  ! $LABEL FAILED — continuing ladder"
 done
 
 # Build a one-shot scaling summary that flattens every per-policy summary
@@ -212,6 +216,8 @@ hf jobs run \
     -e SEED_BASE="$SEED_BASE" \
     -e TASKS="$TASKS" \
     -e SELLER_MODEL="$SELLER_MODEL" \
+    -e ENABLE_NLP="$ENABLE_NLP" \
+    -e TAG_SUFFIX="$TAG_SUFFIX" \
     -e RESULTS_REPO="$RESULTS_REPO" \
     "$IMAGE" \
     bash -c "$JOB_SCRIPT"
