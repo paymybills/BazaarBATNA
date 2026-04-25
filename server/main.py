@@ -337,6 +337,49 @@ async def health():
     return {"status": "ok", "version": "2.0.0"}
 
 
+# ── Highlight: span-level tell extraction for the /sell page ────
+
+class HighlightRequest(BaseModel):
+    message: str
+
+
+class HighlightSpan(BaseModel):
+    start: int
+    end: int
+    text: str
+    signal: str
+    score: float
+    explanation: str
+
+
+class HighlightResponse(BaseModel):
+    spans: list[HighlightSpan]
+    aggregate: dict[str, float]
+
+
+@app.post("/highlight", response_model=HighlightResponse)
+async def highlight(req: HighlightRequest):
+    """Find tell-triggering phrases in a seller message and return char spans.
+
+    Used by the /sell page to underline urgency/deception/condition phrases
+    in the user's chat bubble after they send. Pattern-based, deterministic,
+    no LLM call — instant.
+    """
+    from nlp.keyword_patterns import find_matches, aggregate_signals
+
+    matches = find_matches(req.message)
+    return HighlightResponse(
+        spans=[
+            HighlightSpan(
+                start=m.start, end=m.end, text=m.text,
+                signal=m.signal, score=m.score, explanation=m.explanation,
+            )
+            for m in matches
+        ],
+        aggregate=aggregate_signals(matches),
+    )
+
+
 # ── Simulate (AI auto-play for spectator mode) ──────────────────
 
 class SimulateRequest(BaseModel):
