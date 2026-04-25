@@ -75,14 +75,22 @@ def buyer_offer(
     prev_offer: float | None,
     seller_last_price: float,
 ) -> float:
-    """Deterministic buyer policy: open at 55% of ask, walk toward seller's last counter."""
+    """Deterministic buyer policy: open at 55% of ask, walk aggressively toward seller's last counter.
+
+    Designed to reach (and slightly exceed) typical reservation prices (≈ 78% of ask)
+    within max_rounds, so the seller has a real shot at closing. Earlier version
+    plateaued around 74% — sellers never had an offer they could legally accept.
+    """
     if round_idx == 1 or prev_offer is None:
         return round(max(1.0, asking * 0.55), 2)
     progress = round_idx / max_rounds
-    step = 0.16 + 0.28 * progress
-    target = min(asking * 0.92, seller_last_price * (0.92 + 0.04 * progress))
+    # Larger step + higher target so buyer pushes past 80% of asking by round 6-7
+    step = 0.30 + 0.40 * progress
+    target = min(asking * 0.95, seller_last_price * (0.97 + 0.02 * progress))
     offer = prev_offer + (target - prev_offer) * step
-    return round(max(prev_offer + 1.0, offer), 2)
+    # Floor: always advance by at least 2% of asking per round
+    floor_advance = prev_offer + max(1.0, asking * 0.02)
+    return round(max(floor_advance, offer), 2)
 
 
 def judge_persona(
