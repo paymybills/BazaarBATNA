@@ -66,7 +66,29 @@ def _load_bundle(model_name: str) -> _Bundle:
 
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    # Tokenizer loading on some environments (notably Kaggle) can hit a
+    # SentencePiece error: `TypeError: not a string` when a Path-like is passed
+    # into `SentencePieceProcessor.Load`. If that happens, fall back to
+    # constructing GemmaTokenizer directly with a string path to tokenizer.model.
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, trust_remote_code=True)
+    except TypeError as e:
+        msg = str(e).lower()
+        if "not a string" not in msg:
+            raise
+        try:
+            from huggingface_hub import hf_hub_download
+            from transformers import GemmaTokenizer
+
+            tok_path = hf_hub_download(
+                repo_id=model_name,
+                filename="tokenizer.model",
+                token=True,
+            )
+            tokenizer = GemmaTokenizer(vocab_file=str(tok_path))
+        except Exception:
+            # If fallback fails, re-raise the original, more informative error.
+            raise e
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
