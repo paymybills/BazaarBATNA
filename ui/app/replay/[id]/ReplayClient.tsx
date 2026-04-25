@@ -137,7 +137,7 @@ export function ReplayClient({ replay }: { replay: CuratedReplay }) {
               <span className="text-[9px] font-mono text-foreground/40 pt-1 w-12 shrink-0 italic">[{String(entry.round).padStart(2, '0')}]</span>
               <div className="flex-1">
                 <span className="font-black uppercase tracking-widest text-[10px] mr-4">
-                  {entry.actor === "buyer" ? "MolBhav" : "Seller"}
+                  {entry.actor === "buyer" ? "Sauda" : "Seller"}
                 </span>
                 <span className="font-medium text-foreground tracking-tight">
                   {entry.text}

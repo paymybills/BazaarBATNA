@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   title: "BazaarBATNA — Negotiation Playground",
   description:
     "An OpenEnv negotiation playground. Watch agents haggle. Or step in yourself.",
-  keywords: ["negotiation", "AI agent", "game theory", "NLP", "OpenEnv", "MolBhav", "BazaarBATNA"],
+  keywords: ["negotiation", "AI agent", "game theory", "NLP", "OpenEnv", "Sauda", "BazaarBATNA"],
 };
 
 export default function RootLayout({

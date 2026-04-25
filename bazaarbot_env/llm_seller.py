@@ -25,7 +25,7 @@ class LLMSeller:
         self,
         listing: dict,
         role_brief: dict,
-        model: str = "gemma2:9b",
+        model: str = "gemma-4-e4B",
     ):
         self.listing = listing
         self.role_brief = role_brief

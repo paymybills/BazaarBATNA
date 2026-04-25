@@ -29,7 +29,7 @@ n=20 per task. Mean normalized surplus on [0, 1]. Bestdealbot wins every task an
 - **+916%** vs rule-based on `read_the_tells` (the tells-heavy suite)
 - Stack runs in ~7 GB VRAM (RTX 2050 class)
 
-See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for full transcripts. Sister landing-page repo: [paymybills/MolBhav](https://github.com/paymybills/MolBhav).
+See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for full transcripts. Sister landing-page repo: [paymybills/Sauda](https://github.com/paymybills/Sauda).
 
 ---
 

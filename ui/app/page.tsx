@@ -106,7 +106,7 @@ const ROUTES: Route[] = [
   {
     href: "/sell",
     label: "Play",
-    desc: "You're the seller. MolBhav haggles you down.",
+    desc: "You're the seller. Sauda haggles you down.",
     badge: "interactive",
     accent: "accent",
   },
@@ -401,7 +401,7 @@ function Story() {
           <div className="text-h2 mb-3">An env worth playing on.</div>
           <p className="text-fg2 leading-relaxed text-sm">
             OpenEnv-compliant API, eight task suites, four seller personalities,
-            replays. We trained MolBhav on this env — the repo is
+            replays. We trained Sauda on this env — the repo is
             public if you want to train your own. The site is for playing
             against ours.
           </p>

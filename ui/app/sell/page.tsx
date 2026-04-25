@@ -151,7 +151,7 @@ function TellsPanel({ tells }: { tells: TellSignal[] }) {
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6">
-      <div className="text-eyebrow mb-5">What MolBhav reads</div>
+      <div className="text-eyebrow mb-5">What Sauda reads</div>
       {Object.entries(groups).map(([group, signals]) =>
         signals.length > 0 ? (
           <div key={group} className="mb-5 last:mb-0">
@@ -409,7 +409,7 @@ export default function SellPage() {
       <div className="mb-10">
         <h1 className="text-h1 mb-2">Play</h1>
         <p className="text-meta">
-          You&apos;re the seller. MolBhav is the buyer. Mirrors the Chicago HAI Kellogg setup.
+          You&apos;re the seller. Sauda is the buyer. Mirrors the Chicago HAI Kellogg setup.
         </p>
       </div>
 
@@ -569,7 +569,7 @@ export default function SellPage() {
                       tone={sellerShare !== null && sellerShare > 0.5 ? "good" : "default"}
                     />
                     <ResultStat
-                      label="MolBhav share"
+                      label="Sauda share"
                       value={buyerShare !== null ? `${(buyerShare * 100).toFixed(0)}%` : "—"}
                       tone={buyerShare !== null && buyerShare > 0.5 ? "warn" : "default"}
                     />
@@ -582,11 +582,11 @@ export default function SellPage() {
                 <p className="text-fg2 text-sm leading-relaxed mb-6 max-w-xl">
                   {result?.outcome === "deal"
                     ? sellerShare !== null && sellerShare > 0.6
-                      ? "You held the line. MolBhav still closed because the deal beat its reservation."
+                      ? "You held the line. Sauda still closed because the deal beat its reservation."
                       : sellerShare !== null && sellerShare < 0.4
-                      ? "MolBhav out-anchored you. The buyer captured most of the surplus."
+                      ? "Sauda out-anchored you. The buyer captured most of the surplus."
                       : "Fair split. Both sides walked away with reasonable surplus."
-                    : "No agreement reached. Either you held above MolBhav's budget, or it walked."}
+                    : "No agreement reached. Either you held above Sauda's budget, or it walked."}
                 </p>
                 <button
                   onClick={() => window.location.reload()}

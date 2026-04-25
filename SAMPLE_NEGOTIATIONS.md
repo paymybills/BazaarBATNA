@@ -1,11 +1,11 @@
-# MolBhav — Sample Negotiations
+# Sauda — Sample Negotiations
 
 Live transcripts pulled from `eval/out/results_ollama_bestdealbot.jsonl` (n=60 episodes total, 20 per task suite).
 
 **Reading guide:**
 
 - 🏪 Seller turns are free-form natural language (Hinglish or English depending on the task)
-- 🤖 MolBhav turns are structured actions: `offer`, `accept`, or `walk` with a price
+- 🤖 Sauda turns are structured actions: `offer`, `accept`, or `walk` with a price
 - `surplus` ∈ [0, 1] — fraction of the bargaining zone the buyer captured. 1.0 = bought at seller's cost, 0.0 = paid full ask
 
 ---
@@ -18,35 +18,35 @@ _Real Amazon listing → buyer agent negotiates from a noisy product description
 
 > 🏪 **Seller:** Seller opens: "7299 rupees for this Crompton Gracee 5-L Instant Water Heater (Geyser). Very fair."
 
-> 🤖 **MolBhav:** `offer` at **₹4,697.82**
+> 🤖 **Sauda:** `offer` at **₹4,697.82**
 
 > 🏪 **Seller:** Seller: "Okay, 6569. But that's the limit."
 
-> 🤖 **MolBhav:** `offer` at **₹4,269.91**
+> 🤖 **Sauda:** `offer` at **₹4,269.91**
 
 > 🏪 **Seller:** Seller: "I can do 5839. Not lower. This is the last one I have."
 
-> 🤖 **MolBhav:** `offer` at **₹3,795.48**
+> 🤖 **Sauda:** `offer` at **₹3,795.48**
 
 > 🏪 **Seller:** Seller: "5109 rupees. That's my best offer. This is the last one I have."
 
-> 🤖 **MolBhav:** `offer` at **₹3,321.05**
+> 🤖 **Sauda:** `offer` at **₹3,321.05**
 
 > 🏪 **Seller:** Seller: "4379 rupees. That's my best offer."
 
-> 🤖 **MolBhav:** `offer` at **₹2,846.61**
+> 🤖 **Sauda:** `offer` at **₹2,846.61**
 
 > 🏪 **Seller:** Seller: "I can do 3650. Not lower."
 
-> 🤖 **MolBhav:** `offer` at **₹2,372.18**
+> 🤖 **Sauda:** `offer` at **₹2,372.18**
 
 > 🏪 **Seller:** Seller: "I can do 2920. Not lower."
 
-> 🤖 **MolBhav:** `offer` at **₹2,540.05**
+> 🤖 **Sauda:** `offer` at **₹2,540.05**
 
 > 🏪 **Seller:** Seller: "2645 rupees. That's my best offer."
 
-> 🤖 **MolBhav:** `accept`
+> 🤖 **Sauda:** `accept`
 
 > 🏪 **Seller:** You accept the seller's offer of 2645 rupees.
 
@@ -60,11 +60,11 @@ _High-stakes single-shot: seller emits a *fake urgency* tell. Buyer must not cap
 
 > 🏪 **Seller:** Seller opens: "This handwoven silk scarf is selling fast. 76, and honestly I'm losing money at that."
 
-> 🤖 **MolBhav:** `offer` at **₹66.03**
+> 🤖 **Sauda:** `offer` at **₹66.03**
 
 > 🏪 **Seller:** Seller: "66... you know, I shouldn't even go this low. My cousin told me someone offered more yesterday."
 
-> 🤖 **MolBhav:** `accept`
+> 🤖 **Sauda:** `accept`
 
 > 🏪 **Seller:** You accept the seller's offer of 66 rupees.
 
@@ -78,35 +78,35 @@ _Sustained 10-episode career arc against a default-personality seller._
 
 > 🏪 **Seller:** Seller opens: "60 rupees for this handwoven silk scarf. Very fair."
 
-> 🤖 **MolBhav:** `offer` at **₹39.00**
+> 🤖 **Sauda:** `offer` at **₹39.00**
 
 > 🏪 **Seller:** Seller: "54 rupees. That's my best offer."
 
-> 🤖 **MolBhav:** `offer` at **₹34.91**
+> 🤖 **Sauda:** `offer` at **₹34.91**
 
 > 🏪 **Seller:** Seller: "Okay, 47. But that's the limit."
 
-> 🤖 **MolBhav:** `offer` at **₹30.81**
+> 🤖 **Sauda:** `offer` at **₹30.81**
 
 > 🏪 **Seller:** Seller: "I can do 41. Not lower."
 
-> 🤖 **MolBhav:** `offer` at **₹30.00**
+> 🤖 **Sauda:** `offer` at **₹30.00**
 
 > 🏪 **Seller:** Seller: "Okay, 35. But that's the limit. This is the last one I have."
 
-> 🤖 **MolBhav:** `offer` at **₹30.00**
+> 🤖 **Sauda:** `offer` at **₹30.00**
 
 > 🏪 **Seller:** Seller: "I can do 32. Not lower. Someone else was looking at this earlier..."
 
-> 🤖 **MolBhav:** `offer` at **₹29.93**
+> 🤖 **Sauda:** `offer` at **₹29.93**
 
 > 🏪 **Seller:** Seller: "I can do 32. Not lower."
 
-> 🤖 **MolBhav:** `offer` at **₹30.00**
+> 🤖 **Sauda:** `offer` at **₹30.00**
 
 > 🏪 **Seller:** Seller: "32 rupees. That's my best offer."
 
-> 🤖 **MolBhav:** `accept`
+> 🤖 **Sauda:** `accept`
 
 > 🏪 **Seller:** You accept the seller's offer of 32 rupees.
 

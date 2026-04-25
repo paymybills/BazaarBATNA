@@ -12,14 +12,14 @@ This doc is self-contained. Read it once, then build.
 ## Context
 
 **BazaarBATNA** is an OpenEnv-compliant negotiation environment. We trained an agent
-(MolBhav / bestdealbot) that beats baselines by 3×. The existing `ui/` is functional but
+(Sauda / bestdealbot) that beats baselines by 3×. The existing `ui/` is functional but
 demo-weak — judges land here and it doesn't sell the work. Your job: overhaul it into a
 **demo-first platform site** that judges can hit, immediately understand, and play with.
 
 **The product is the agent.** The env is the workshop where we built it. Site emphasis stays
 on the agent, with the env as supporting evidence.
 
-**Sister landing repo:** `paymybills/MolBhav` is a separate static landing page on Vercel.
+**Sister landing repo:** `paymybills/Sauda` is a separate static landing page on Vercel.
 This site (`ui/`) is the **interactive platform** — where you actually play, watch replays,
 see leaderboards. The two link to each other but serve different purposes.
 
@@ -64,9 +64,9 @@ The current home is a generic dashboard. Replace with a **demo-first hero** that
 
 ### 1. Hero section
 - Tagline: "The negotiation agent that reads what the seller doesn't say."
-- Subhead: 1-2 lines explaining BazaarBATNA = env, MolBhav = agent.
+- Subhead: 1-2 lines explaining BazaarBATNA = env, Sauda = agent.
 - Two CTAs:
-  - **"Try it →"** — links to `/sell` (user plays seller, MolBhav plays buyer)
+  - **"Try it →"** — links to `/sell` (user plays seller, Sauda plays buyer)
   - **"Watch a replay →"** — links to `/replay` with a pre-selected impressive one
 - Animated background or subtle hero visual (no heavy 3D — keep it fast)
 
@@ -77,10 +77,10 @@ Pull from `eval/out/summary_ollama_bestdealbot.json` (or hardcode initially):
 - **100%** deal rate
 - **7 GB** GPU footprint
 
-Use the same `<Stat>` component pattern as `MolBhav/app/page.tsx` (clone it).
+Use the same `<Stat>` component pattern as `Sauda/app/page.tsx` (clone it).
 
 ### 3. The four pillars
-Same content as MolBhav landing page (NLP extractor, Bayesian steering, synthetic data, DPO),
+Same content as Sauda landing page (NLP extractor, Bayesian steering, synthetic data, DPO),
 but more compact — this is a platform site, not a marketing page.
 
 ### 4. "Try the playable demo" callout
@@ -88,17 +88,17 @@ Big card linking to `/sell` with a mini preview screenshot. This is the killer f
 gets prime real estate.
 
 ### 5. Eval table
-Same table as MolBhav: rule_based vs llama3.2:3b vs bestdealbot across 3 tasks. Highlight
+Same table as Sauda: rule_based vs llama3.2:3b vs bestdealbot across 3 tasks. Highlight
 bestdealbot row.
 
 ### 6. Footer
-Links to: GitHub, MolBhav landing, HF model card (`PayMyBills/bestdealbot`), HF blog (when written).
+Links to: GitHub, Sauda landing, HF model card (`PayMyBills/bestdealbot`), HF blog (when written).
 
 ---
 
 ## The `/sell` page (the demo) — second priority
 
-This is where users play seller against MolBhav. **Mirror the Chicago HAI Kellogg study UX.**
+This is where users play seller against Sauda. **Mirror the Chicago HAI Kellogg study UX.**
 
 ### Layout
 
@@ -116,7 +116,7 @@ Two-column desktop, stacked mobile:
 │  Chat thread                │                      │
 │  ┌──────────────────────┐   │                      │
 │  │ Seller: I'm asking…  │   │                      │
-│  │ MolBhav: I can do…   │   │                      │
+│  │ Sauda: I can do…   │   │                      │
 │  │ Seller: [input]      │   │                      │
 │  └──────────────────────┘   │                      │
 │  [send button]              │                      │
@@ -126,10 +126,10 @@ Two-column desktop, stacked mobile:
 ### Behavior
 - On page load: fetch a random listing + role brief from API (`POST /reset` with `role=seller`)
 - Show role brief on the left
-- MolBhav opens with a counter-offer (or user opens — match training distribution)
+- Sauda opens with a counter-offer (or user opens — match training distribution)
 - User types in the textarea, hits send
 - Send: POST to `/step` with the seller message + price (parsed from text)
-- Response: MolBhav's reply + tells extracted from user's last message + whether MolBhav accepted/walked
+- Response: Sauda's reply + tells extracted from user's last message + whether Sauda accepted/walked
 - **Render extracted tells in the right panel after each user turn.** Static panel, NOT live overlay (per IMPLEMENTATION_PLAN.md).
 - Show "buyer is thinking…" loading state during the API call (latency is real)
 
@@ -153,7 +153,7 @@ hold out without it.
 
 After the negotiation ends, reveal:
 - Their seller_share
-- MolBhav's buyer_share
+- Sauda's buyer_share
 - "You came in at the 67th percentile of human sellers" (fake, but motivating)
 
 ---
@@ -171,7 +171,7 @@ To find good replays:
 - Sort `eval/out/results_ollama_bestdealbot.jsonl` by `normalized_surplus`
 - Pick top deceptive-seller win (the money shot — agent didn't fall for fake urgency)
 - Pick a long-haggle episode (8+ rounds)
-- Pick a walk where MolBhav correctly walked
+- Pick a walk where Sauda correctly walked
 
 ---
 
@@ -276,9 +276,9 @@ Look at `ui/app/lib/api.ts` for the existing client wrapper. Use it. Don't reinv
 
 ## Acceptance — site is done when
 
-- [ ] Home page in 1 sentence explains what BazaarBATNA + MolBhav are
+- [ ] Home page in 1 sentence explains what BazaarBATNA + Sauda are
 - [ ] First-time visitor finds and clicks "Try it" within 10 seconds
-- [ ] `/sell` page lets a user play one full negotiation against MolBhav with tells panel
+- [ ] `/sell` page lets a user play one full negotiation against Sauda with tells panel
 - [ ] At least 3 curated replays are accessible from home
 - [ ] Eval numbers are visible from home, accurate, and link to source data
 - [ ] Site is responsive on a 13" laptop and a phone
@@ -297,7 +297,7 @@ Common pitfalls:
 2. **Don't add new API routes** — work through existing FastAPI endpoints
 3. **Don't import from `ui/CLAUDE.md`'s training-data shape of Next** — it has explicit warnings
 4. **Don't break the existing pages** — they work. Polish, don't rewrite.
-5. **Use the existing `<Stat>` and `<Pillar>` patterns from `MolBhav/app/page.tsx`** — clone the components rather than inventing new ones
+5. **Use the existing `<Stat>` and `<Pillar>` patterns from `Sauda/app/page.tsx`** — clone the components rather than inventing new ones
 
 If something is unclear, check IMPLEMENTATION_PLAN.md in the repo root — pinned sections
 explain the framing, conversation realism rules, and demo plan.

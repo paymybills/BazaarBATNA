@@ -28,20 +28,20 @@ Pillars 2 and 3 run in parallel once the NLP extractor (Pillar 1 Step 1) is done
 
 ---
 
-## 📌 PINNED: Public demo plan (MolBhav site)
+## 📌 PINNED: Public demo plan (Sauda site)
 
 The eval numbers are great but no one outside the team can *use* the agent. This is the demo
 that turns "trust the numbers" into "watch the agent think."
 
 ### Framing
 Mirror the **Chicago HAI Kellogg study** UX. User gets a structured seller role brief
-(asking price, reservation price, bonus structure) and negotiates against MolBhav. **User
-plays seller, MolBhav plays buyer** — matches the training distribution and makes the tells
+(asking price, reservation price, bonus structure) and negotiates against Sauda. **User
+plays seller, Sauda plays buyer** — matches the training distribution and makes the tells
 panel meaningful (we show what the buyer extracts from the *user's* messages).
 
 ### MVP (4 hours, demo-defensible)
-- [ ] `/play` route in MolBhav with one role brief (Chicago HAI house, copied from PDF)
-- [ ] Plain chat UI: user is seller, MolBhav is buyer, listing message opens
+- [ ] `/play` route in Sauda with one role brief (Chicago HAI house, copied from PDF)
+- [ ] Plain chat UI: user is seller, Sauda is buyer, listing message opens
 - [ ] After each user turn, render extracted tells in a static side panel (no live overlay)
 - [ ] Pre-warm ministral + bestdealbot on page load to avoid 5s cold-start
 - [ ] cloudflared tunnel exposes `POST /extract` + `POST /buyer-step` from local FastAPI
@@ -67,7 +67,7 @@ panel meaningful (we show what the buyer extracts from the *user's* messages).
 
 ## 📌 PINNED: Conversation realism
 
-Current transcripts show MolBhav responding with `offer at ₹4697.82` — pure structured action,
+Current transcripts show Sauda responding with `offer at ₹4697.82` — pure structured action,
 no natural language. That is fine for eval (the harness only scores price + outcome) but it
 **breaks the demo** because real negotiations are conversation, not vending machines.
 
@@ -213,13 +213,13 @@ and so the README "future work" section writes itself.
 - **Floating Grammarly-style overlay** for live tells highlighting. In-bubble post-send
   highlighting gets 90% of the demo win for 10% of the engineering.
 - **Public agent submission leaderboard** — accept community agents via the OpenEnv API,
-  rank against MolBhav. Cool platform play, real moderation problem.
+  rank against Sauda. Cool platform play, real moderation problem.
 
 ---
 
 ## 📌 PINNED: Team split
 
-**Solo (paymybills):** site (BazaarBATNA UI overhaul + MolBhav landing) + bestdealbot training +
+**Solo (paymybills):** site (BazaarBATNA UI overhaul + Sauda landing) + bestdealbot training +
 NLP extractor + integration.
 
 **Teammate(s):** Gemma seller + listings integration + seller-quality eval.

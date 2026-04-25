@@ -6,7 +6,7 @@
 > **Branch: `seller/llm-impl` off `main`.**
 > **PR back to main when acceptance numbers pass.**
 
-You're building the **LLM-backed seller** for BazaarBATNA. The buyer (MolBhav) is already
+You're building the **LLM-backed seller** for BazaarBATNA. The buyer (Sauda) is already
 trained and working. Right now the seller is a rule-based stub that says "5109 rupees. Not
 lower." in a loop. Your job: replace it with a Gemma-based LLM seller that **negotiates like
 a real human grounded in a real listing**.
