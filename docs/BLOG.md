@@ -59,6 +59,39 @@ Three commits to get the seller to accept a deal. *Three.* The buyer is a whole 
 
 The eval ran clean: **5 of 6 metrics passed.** The 6th (`persona_consistency`) is Gemma classifying its own persona from a transcript across four overlapping classes. It scores 38%. The metric is structurally cursed and we ship it anyway because hiding it would be worse.
 
+## the part where notebooks died and HF Jobs took over
+
+Up to here we'd been running everything in Colab notebooks. Open `train_colab.ipynb`, click "Run All", babysit it, restart when the kernel times out, restart when the cell that downloads the dataset 504s, restart when bitsandbytes wants a CUDA driver Colab doesn't have, restart when the runtime decides it's been alive too long and disconnects you mid-step-22 of GRPO and now those step-22 weights are *gone* because you never saved a checkpoint that early.
+
+The math here is brutal. A run takes 45 minutes. A disconnect kills it at minute 30. That's a 30-minute payment for a 0-step result. Do this enough times and your hackathon has fewer hours left than the model has training to do.
+
+I ported everything to **HF Jobs**.
+
+```bash
+hf jobs run \
+    --flavor l40sx1 \
+    --timeout 2h \
+    --secrets HF_TOKEN \
+    -e MODEL_REPO=PayMyBills/bestdealbot-v2 \
+    python:3.11-slim \
+    bash -c "$JOB_SCRIPT"
+```
+
+That's the entire deploy. The job runs in HF infra, on a 48GB L40S, with `HF_TOKEN` mounted as a secret, and the entire script (`pip install`, `git clone`, run training, push artifacts to a results dataset repo) is one heredoc passed in `bash -c`. No notebook. No browser tab to keep alive. No "you've been disconnected." If my laptop dies, the job doesn't.
+
+The migration unlocked things we couldn't have done in notebooks:
+
+- **Parallel adapters.** I fired v2 GRPO, v2-tells GRPO, and v3 DPO as three separate jobs on three separate flavors at the same time. In a notebook world I'd have run them sequentially over six hours. In HF Jobs world I ran them in parallel and saw all three results within one hour.
+- **Reproducible from a fresh container.** Every job starts from `python:3.11-slim` and clones the public repo. There's no "well it worked on my Colab because pip resolved differently." If it works in HF Jobs, it works for the judges.
+- **Results dump auto-uploads.** Each job ends with an `HfApi.upload_folder` to a dataset repo (`PayMyBills/scaling-eval-runs`, `PayMyBills/dpo-runs`, etc.). I didn't have to remember to download artifacts before a kernel timeout. The artifacts were *the goal* of the job.
+- **Logs are first-class.** `hf jobs logs <job_id>` streams stdout live, and the full log is preserved in the dashboard after the job ends. Notebooks lose the cell output the moment the runtime disconnects.
+
+The migration cost was a Saturday afternoon. Every script in `scripts/run_*_hfjobs.sh` is the same shape: take env-vars, build a heredoc `JOB_SCRIPT`, hand it to `hf jobs run`. We have eight of these now. If we were still on notebooks I'd have shipped maybe two adapters; on HF Jobs I shipped four (v1, v2, v2-tells, v3) plus an SFT-with-tells follow-up that fired *during this blog post*.
+
+There's one annoying edge — the `/whoami-v2` endpoint on the HF API is rate-limited per-account. Submit five jobs in two minutes and the sixth will 429. The fix is "wait six minutes." I learned this the bad way (rapid-fire retries, which makes the limit *worse*), so I'm telling you the easy way: budget your job submits, don't loop them.
+
+> **Lesson from the trenches #N**: Move off notebooks the moment you have more than one experiment to run. The browser-tab-as-runtime model is fine for `print(model.config)`. It is not fine for any process that takes longer than a coffee.
+
 ## sauda v1 and the seller that was secretly garbage
 
 A few days ago, before the seller hardening, we ran a Sauda v1 eval. Numbers were beautiful:
