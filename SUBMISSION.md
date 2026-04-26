@@ -74,7 +74,13 @@ Additional endpoints for arena/multi-buyer mode, counterfactual replay
 streaming for real-time negotiation visualization.
 
 **Repo:** https://github.com/paymybills/BazaarBATNA
-**Trained model (v1):** https://huggingface.co/PayMyBills/bestdealbot
+**Live demo:** https://metathon.vercel.app (calls HF Inference Endpoint serving Sauda v2)
+**HF Space:** https://huggingface.co/spaces/PayMyBills/BazaarBATNA
+**Trained models:**
+- Sauda v2 (canonical, 8B SFT+GRPO) — https://huggingface.co/PayMyBills/bestdealbot-v2
+- Sauda v3 (v2 + DPO/RLAIF) — https://huggingface.co/PayMyBills/bestdealbot-v3
+- Sauda v2-tells (GRPO-only, tells in loop) — https://huggingface.co/ankur-1232/bestdealbot-v2-tells
+- Sauda v1 (3B SFT+GRPO, baseline) — https://huggingface.co/PayMyBills/bestdealbot
 
 ## Agent Capabilities
 
@@ -137,41 +143,63 @@ adjustments for career_10).
 
 ## Post-Training / Self-Improvement Strategy
 
-Three-stage pipeline, with stages 1–2 complete and stage 3 planned for
-on-site:
+Four-stage ladder, all stages shipped and evaluated. The buyer ships as
+**Sauda v2** (8B SFT+GRPO); v3 (DPO/RLAIF on top of v2) and v2-tells
+(GRPO-only with tells in the loop) are available as comparison adapters.
 
-### Stage 1 — SFT warmup (✓ complete, v1 model shipped)
+### Stage 0 — Sauda v1 baseline (✓ shipped)
 
-256 (observation, rule-based-buyer-action) pairs. SFT on LoRA adapters
-over Llama-3.2-3B-Instruct at 4-bit quantization. Teaches strict JSON
-output format and establishes sensible opening behavior. Loss converges
-from 3.0 to 0.21 in 96 steps (~15 min on 2× T4).
+Llama-3.2-3B-Instruct + LoRA, SFT (256 pairs, loss 3.0 → 0.21) → GRPO
+(256 prompts, 30 steps). Validates the pipeline and produces a 3B
+baseline for the scaling ladder. Repo: `PayMyBills/bestdealbot`.
 
-### Stage 2 — GRPO (✓ complete, same v1 model)
+### Stage 1 — Sauda v2 SFT warmup (✓ shipped)
 
-Environment-reward GRPO using the shaped first-step reward. 256 prompts
-sampled over `amazon_realistic` + `single_deal` + `asymmetric_pressure`.
-`num_generations=2`, `max_steps=30`. HF checkpoints every 10 steps
-protect against session timeouts. Result: model emits valid JSON with
-reasonable opening offers (~25–40% of asking price) across all tested
-product categories.
+Scaled to **Llama-3.1-8B-Instruct** (QLoRA, 4-bit). 1024
+(observation, rule-based-buyer-action) pairs. Teaches strict JSON output
+and sensible opening behavior. Trains in ~25 min on a10g-large.
 
-### Stage 3 — LLM-Judge-Tagged DPO (planned, on-site)
+### Stage 2 — Sauda v2 GRPO (✓ shipped, this is the canonical model)
 
-This is the self-improvement loop — fully automated, no human labels
-after initial taxonomy definition.
+Environment-reward GRPO with shaped first-step reward. 256 prompts
+across `amazon_realistic` + `single_deal` + `asymmetric_pressure`.
+`num_generations=2`, `max_steps=30`. Per-step `trainer_state.json`
+published live on the model repo. Result: **mean normalized surplus
+0.728** across the 3-task suite (vs 0.570 for the 3B baseline,
+0.678 for the 8B base — clean scaling signal). Repo:
+`PayMyBills/bestdealbot-v2`.
+
+### Stage 2-tells — GRPO with tells in the loop (✓ shipped, ablation)
+
+Same GRPO recipe but `ENABLE_TELLS_IN_LOOP=1` injects seller-tell
+signals into multi-turn rollouts so the buyer trains *against* tell
+information instead of seeing it for the first time at inference.
+Result: deal rate 1.00, rounds 3.0, mean surplus 0.653. The
+direct comparison vs vanilla v2 is unfair (v2-tells skipped the SFT
+warmup), so we read this as evidence that tells-in-loop trains
+stably, not as evidence that tells help or hurt. A proper
+SFT-with-tells → GRPO-with-tells run was queued late in the
+hackathon window and is included in the model lineup.
+Repo: `ankur-1232/bestdealbot-v2-tells`.
+
+### Stage 3 — DPO/RLAIF on top of v2 (✓ shipped as Sauda v3)
+
+This is the self-improvement loop. The judge tags failure modes on
+rollouts, generates "repaired" actions, and the (bad, good) pairs
+become DPO training data. Fully automated after the failure taxonomy
+is fixed once.
 
 ```
 for round in unsupervised_loop:
-    # 1. Rollout: current policy negotiates N=50 episodes
-    transcripts = [rollout(policy, sample_task()) for _ in range(50)]
+    # 1. Rollout: current policy negotiates N episodes
+    transcripts = [rollout(policy, sample_task()) for _ in range(N)]
 
-    # 2. Judge: frozen 4B LLM classifies failure modes
+    # 2. Judge: classifies failure modes per transcript
     #    Taxonomy: {capitulated_early, over_anchored, walked_winnable,
     #               ignored_tells, missed_accept, invalid_json, other}
     tagged = [(t, judge.classify(t)) for t in transcripts]
 
-    # 3. Repair: for each tagged failure, judge rewrites the bad turn
+    # 3. Repair: judge rewrites the bad turn
     pairs = []
     for transcript, tag in tagged:
         if tag in FAILURE_TAXONOMY:
@@ -185,37 +213,48 @@ for round in unsupervised_loop:
     policy = dpo_trainer.step(policy, pairs)
 ```
 
+**Shipped result (Sauda v3):** DPO on Claude-judged pairs. n=10
+preference pairs (small, by design — proves the loop works
+end-to-end), pushed deal rate to 1.00 and reduced rounds from 6.0
+→ 3.5, at the cost of ~0.03 in mean surplus (0.728 → 0.695).
+This is the legible trade-off DPO is supposed to give: closer-
+biased buyer that walks less. The full setback story (a `$BUYER_MODEL`
+typo eating 4hr of rollouts; per-pair-checkpoint upload to recover)
+is documented in the blog. Repo: `PayMyBills/bestdealbot-v3`.
+
 Why this is credible self-improvement:
-- **No human labels** after the failure taxonomy is fixed once
-- **No frontier API dependency** — judge is a local 4B model
+- **No human labels** after the taxonomy is fixed once
+- **Frontier-judge or local-judge interchangeable** — Claude here, a
+  4B local model is the natural next step (cost & sovereignty)
 - **Failure-mode-targeted gradient** — DPO shifts probability mass away
-  from specific, legible mistakes, unlike generic GRPO reward signal
-- **Closed loop** — stage 3 produces checkpoint N+1, which becomes the
-  policy for stage 3 at iteration N+2. Unsupervised continuous learning
+  from specific, legible mistakes, unlike generic GRPO reward
+- **Closed loop** — v3 becomes the policy for the next iteration's
+  rollouts, with a fresh judge pass producing the next pair set
 
-The judge's taxonomy is domain-specific (negotiation failure modes) but
-the pattern generalizes: any environment where an LLM can post-hoc
-classify trajectory failures supports this loop.
-
-## What's Complete vs. What's On-Site Work
+## What's Shipped
 
 | Component | Status |
 |---|---|
 | FastAPI env server (OpenEnv-compliant) | ✓ shipped |
 | 8 tasks + graders | ✓ shipped |
 | Tells system + personality-conditioned sellers | ✓ shipped |
-| Amazon listings integration | ✓ shipped |
+| Amazon listings integration (1,417 products) | ✓ shipped |
 | Next.js observer UI (human play, AI spectate, replay, arena) | ✓ shipped |
-| SFT+GRPO training pipeline (Kaggle notebook, reproducible) | ✓ shipped |
-| v1 trained adapter on HF | ✓ shipped |
-| Eval harness (3 policy types, per-task summaries) | ✓ shipped |
-| **LLM-judge-tagged DPO self-improvement loop** | **planned, on-site** |
-| **Multi-iteration unsupervised training** | **planned, on-site** |
+| Live HF Inference Endpoint serving Sauda v2 (Nvidia L4) | ✓ shipped |
+| SFT+GRPO training pipeline (HF Jobs + Colab, reproducible) | ✓ shipped |
+| Sauda v1 (3B baseline) | ✓ shipped |
+| Sauda v2 (8B SFT+GRPO, canonical) | ✓ shipped |
+| Sauda v2-tells (GRPO-only, tells-in-loop ablation) | ✓ shipped |
+| Sauda v3 (DPO/RLAIF self-improvement) | ✓ shipped |
+| Scaling-ladder eval (3 tasks × 30 ep × 4 buyers) | ✓ shipped |
+| Tells ablation (off / inference-injected / in-loop) | ✓ shipped |
 
-On-site compute credits will be used to run the stage-3 loop across many
-iterations, producing a v2 model measurably better than v1 on the full
-eval suite (especially `read_the_tells` and `career_10` where judge-tagged
-failures add the most signal over environment reward alone).
+**Headline numbers (mean normalized surplus, 3-task suite):**
+- 3B baseline: 0.570  ·  8B base: 0.678  ·  **Sauda v2: 0.728**  ·  v3: 0.695  ·  v2-tells: 0.653
+
+Clean 3B → 8B base → 8B-trained scaling signal. v3 trades surplus for
+closing rate (deal rate 1.00, rounds 3.5). v2-tells is honest about
+the missing-control issue (skipped SFT warmup).
 
 ## Evaluation Logic
 
