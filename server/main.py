@@ -380,6 +380,32 @@ async def highlight(req: HighlightRequest):
     )
 
 
+@app.get("/sauda/health")
+async def sauda_health():
+    """Probe both backends. Used to choose strategy and surface config errors."""
+    from .sauda_buyer import health
+    return health()
+
+
+@app.get("/sauda/backends")
+async def sauda_backends():
+    """Static metadata about available buyer backends, for the /sell UI dropdown."""
+    return {
+        "backends": [
+            {"id": "sauda", "label": "Sauda v2 (HF Endpoint)", "primary": True,
+             "description": "Llama-3.1-8B + SFT+GRPO LoRA, served via HF Inference Endpoint."},
+            {"id": "sauda_ollama", "label": "Sauda v2 (Ollama, local)", "primary": False,
+             "description": "Same adapter, served locally via Ollama. Fallback when HF endpoint is unavailable."},
+            {"id": "smart", "label": "Rule-based (smart)", "primary": False,
+             "description": "Heuristic baseline. No LLM. Always available."},
+            {"id": "naive", "label": "Rule-based (naive)", "primary": False,
+             "description": "Easy buyer for seller-mode warmup."},
+            {"id": "aggressive", "label": "Rule-based (aggressive)", "primary": False,
+             "description": "Hard rule-based buyer."},
+        ]
+    }
+
+
 # ── Simulate (AI auto-play for spectator mode) ──────────────────
 
 class SimulateRequest(BaseModel):
@@ -400,7 +426,40 @@ class SellerModeStepRequest(BaseModel):
 
 
 def _ai_buyer_action(obs: BazaarObservation, strategy: str, rng) -> BazaarAction:
-    """Built-in AI buyer strategies for spectator / seller mode."""
+    """Built-in AI buyer strategies for spectator / seller mode.
+
+    `strategy` values:
+      - "sauda" / "sauda_hf"  → HF Inference Endpoint serving Sauda v2
+      - "sauda_ollama"        → local ollama serving Sauda v2
+      - "smart" / "naive" / "aggressive" → rule-based heuristics (no LLM)
+    """
+    # Live Sauda v2 path (HF endpoint primary, Ollama fallback selectable)
+    if strategy in ("sauda", "sauda_hf", "sauda_ollama"):
+        from .sauda_buyer import sauda_action
+        backend = "ollama" if strategy == "sauda_ollama" else "hf"
+        obs_dict = obs.model_dump() if hasattr(obs, "model_dump") else obs.dict()
+        result = sauda_action(obs_dict, backend=backend)
+        action_str = result.get("action", "offer")
+        price = result.get("price")
+        msg = result.get("message", "")
+        if action_str == "accept":
+            ba = BazaarAction(action="accept")
+        elif action_str == "walk":
+            ba = BazaarAction(action="walk")
+        else:
+            ba = BazaarAction(action="offer", price=float(price) if price is not None else round((obs.own_private_budget or 100) * 0.3, 2))
+        # Smuggle the model's prose message + backend trace through a side channel
+        # (BazaarAction has no message field; the route handler reads .sauda_message
+        # off the action when present).
+        try:
+            object.__setattr__(ba, "sauda_message", msg)
+            object.__setattr__(ba, "sauda_backend", result.get("backend", backend))
+            if result.get("error"):
+                object.__setattr__(ba, "sauda_error", result["error"])
+        except Exception:
+            pass
+        return ba
+
     budget = obs.own_private_budget
     ask = obs.seller_asking_price
     opp = obs.opponent_last_offer or ask
@@ -631,6 +690,9 @@ async def seller_mode_reset(req: SellerModeResetRequest):
     action = _ai_buyer_action(obs, req.strategy, session["rng"])
     session["round"] = 1
     session["last_buyer_offer"] = action.price
+    sauda_msg = getattr(action, "sauda_message", None) or ""
+    sauda_backend = getattr(action, "sauda_backend", None)
+    sauda_error = getattr(action, "sauda_error", None)
     session["history"].append({
         "round": 0,
         "actor": "seller",
@@ -642,9 +704,10 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         "actor": "buyer",
         "action": action.action.value if hasattr(action.action, 'value') else action.action,
         "price": action.price,
+        "message": sauda_msg,
     })
 
-    buyer_msg = (
+    fallback_msg = (
         f"Buyer offers {action.price:.0f} rupees."
         if action.action in ("offer", "OFFER", ActionType.OFFER)
         else f"Buyer {action.action}s."
@@ -654,7 +717,10 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         "round": 1,
         "buyer_action": action.action.value if hasattr(action.action, 'value') else action.action,
         "buyer_price": action.price,
-        "message": buyer_msg,
+        "message": sauda_msg or fallback_msg,
+        "buyer_message": sauda_msg,
+        "buyer_backend": sauda_backend,
+        "buyer_error": sauda_error,
         "your_opening": req.opening_price,
         "history": session["history"],
         "done": False,
@@ -743,18 +809,23 @@ async def seller_mode_step(req: SellerModeStepRequest):
         max_surplus = session["buyer_budget"] - session["seller_cost"]
         buyer_score = max(0, surplus / max_surplus) if max_surplus > 0 else 0
 
+        sauda_msg = getattr(action, "sauda_message", None) or ""
+        sauda_backend = getattr(action, "sauda_backend", None)
         session["history"].append({
             "round": rnd,
             "actor": "buyer",
             "action": "accept",
             "price": seller_price,
+            "message": sauda_msg,
         })
 
         return {
             "round": rnd,
-            "message": f"Buyer accepts your price of {seller_price:.0f}! Deal closed.",
+            "message": sauda_msg or f"Buyer accepts your price of {seller_price:.0f}! Deal closed.",
+            "buyer_message": sauda_msg,
             "buyer_action": "accept",
             "buyer_price": seller_price,
+            "buyer_backend": sauda_backend,
             "done": True,
             "outcome": "deal",
             "agreed_price": seller_price,
@@ -766,19 +837,24 @@ async def seller_mode_step(req: SellerModeStepRequest):
     elif action.action in ("walk", ActionType.WALK):
         session["done"] = True
         session["outcome"] = "walk"
+        sauda_msg = getattr(action, "sauda_message", None) or ""
+        sauda_backend = getattr(action, "sauda_backend", None)
 
         session["history"].append({
             "round": rnd,
             "actor": "buyer",
             "action": "walk",
             "price": None,
+            "message": sauda_msg,
         })
 
         return {
             "round": rnd,
-            "message": "Buyer walks away! No deal.",
+            "message": sauda_msg or "Buyer walks away! No deal.",
+            "buyer_message": sauda_msg,
             "buyer_action": "walk",
             "buyer_price": None,
+            "buyer_backend": sauda_backend,
             "done": True,
             "outcome": "walk",
             "history": session["history"],
@@ -786,18 +862,25 @@ async def seller_mode_step(req: SellerModeStepRequest):
 
     else:  # offer
         session["last_buyer_offer"] = action.price
+        sauda_msg = getattr(action, "sauda_message", None) or ""
+        sauda_backend = getattr(action, "sauda_backend", None)
+        sauda_error = getattr(action, "sauda_error", None)
         session["history"].append({
             "round": rnd,
             "actor": "buyer",
             "action": "offer",
             "price": action.price,
+            "message": sauda_msg,
         })
 
         return {
             "round": rnd,
-            "message": f"Buyer counters with {action.price:.0f} rupees.",
+            "message": sauda_msg or f"Buyer counters with {action.price:.0f} rupees.",
+            "buyer_message": sauda_msg,
             "buyer_action": "offer",
             "buyer_price": action.price,
+            "buyer_backend": sauda_backend,
+            "buyer_error": sauda_error,
             "done": False,
             "history": session["history"],
         }

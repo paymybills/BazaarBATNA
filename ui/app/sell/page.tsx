@@ -403,7 +403,7 @@ export default function SellPage() {
         history: HistoryEntry[];
       }>("/seller-mode/reset", {
         task: "amazon_realistic",
-        strategy: "smart",
+        strategy: "sauda",  // HF endpoint primary; server falls back to rule if unconfigured
         seed: Math.floor(Math.random() * 10000),
         opening_price: brief.asking_price,
       });
