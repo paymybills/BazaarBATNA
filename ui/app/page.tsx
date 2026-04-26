@@ -636,50 +636,50 @@ function SystemDiagram() {
       <rect x="14" y="80" width="120" height="80" rx="8" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.5" />
       <text x="74" y="103" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent)">BUYER</text>
       <text x="74" y="123" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">Sauda</text>
-      <text x="74" y="140" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">Llama-3.1-8B</text>
-      <text x="74" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">+ LoRA + steering</text>
+      <text x="74" y="140" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">Llama-3.1-8B</text>
+      <text x="74" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">+ LoRA + steering</text>
 
       {/* Env (centre) */}
       <rect x="180" y="60" width="120" height="120" rx="8" fill="var(--surface)" stroke="var(--fg2)" strokeWidth="1.5" />
-      <text x="240" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--fg2)">OPENENV</text>
+      <text x="240" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">OPENENV</text>
       <text x="240" y="103" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">BazaarBATNA</text>
-      <text x="240" y="118" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">FastAPI</text>
+      <text x="240" y="118" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">FastAPI</text>
       <line x1="195" y1="128" x2="285" y2="128" stroke="var(--border)" strokeWidth="0.8" />
-      <text x="240" y="142" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">/reset /step</text>
-      <text x="240" y="155" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">/state /score</text>
-      <text x="240" y="168" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">/tasks /health</text>
+      <text x="240" y="142" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">/reset /step</text>
+      <text x="240" y="155" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">/state /score</text>
+      <text x="240" y="168" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">/tasks /health</text>
 
       {/* Seller */}
       <rect x="346" y="80" width="120" height="80" rx="8" fill="var(--surface-2)" stroke="var(--accent-2)" strokeWidth="1.5" />
       <text x="406" y="103" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent-2)">SELLER</text>
       <text x="406" y="123" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">Gemma-4-E4B</text>
-      <text x="406" y="140" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">persona prompt</text>
-      <text x="406" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">+ 4 hard rules</text>
+      <text x="406" y="140" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">persona prompt</text>
+      <text x="406" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">+ 4 hard rules</text>
 
       {/* Buyer → Env (top) */}
       <line x1="134" y1="100" x2="180" y2="100" stroke="var(--fg2)" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="157" y="93" fontSize="9" fontFamily="monospace" fill="var(--fg2)" textAnchor="middle">action</text>
+      <text x="157" y="93" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">action</text>
 
       {/* Env → Buyer (bottom) */}
       <line x1="180" y1="140" x2="134" y2="140" stroke="var(--fg2)" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="157" y="156" fontSize="9" fontFamily="monospace" fill="var(--fg2)" textAnchor="middle">obs + tells</text>
+      <text x="157" y="156" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">obs + tells</text>
 
       {/* Env → Seller (top) */}
       <line x1="300" y1="100" x2="346" y2="100" stroke="var(--fg2)" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="323" y="93" fontSize="9" fontFamily="monospace" fill="var(--fg2)" textAnchor="middle">history</text>
+      <text x="323" y="93" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">history</text>
 
       {/* Seller → Env (bottom) */}
       <line x1="346" y1="140" x2="300" y2="140" stroke="var(--fg2)" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="323" y="156" fontSize="9" fontFamily="monospace" fill="var(--fg2)" textAnchor="middle">offer + msg</text>
+      <text x="323" y="156" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">offer + msg</text>
 
       {/* Tasks (below env, dashed) */}
       <rect x="180" y="210" width="120" height="36" rx="6" fill="var(--surface)" stroke="var(--fg2)" strokeWidth="1" strokeDasharray="4 3" />
-      <text x="240" y="226" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">8 tasks · 3 personas</text>
-      <text x="240" y="239" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">amazon listings</text>
+      <text x="240" y="226" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">8 tasks · 3 personas</text>
+      <text x="240" y="239" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">amazon listings</text>
       <line x1="240" y1="180" x2="240" y2="210" stroke="var(--fg2)" strokeWidth="1" strokeDasharray="2 2" markerEnd="url(#arrowSys)" />
 
       {/* Top eyebrow */}
-      <text x="240" y="32" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">two LLMs · asymmetric information</text>
+      <text x="240" y="32" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">two LLMs · asymmetric information</text>
     </svg>
   );
 }
@@ -826,7 +826,7 @@ function BuyerStackDiagram() {
             <text x="64" y={y + 22} fontSize="13" fontWeight="600" fill="var(--foreground)">
               {layer.label}
             </text>
-            <text x="64" y={y + 38} fontSize="10" fontFamily="monospace" fill="var(--fg2)">
+            <text x="64" y={y + 38} fontSize="10" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">
               {layer.sub}
             </text>
             <text x="290" y={y + 30} fontSize="9" fontFamily="monospace" fill={layer.color}>
@@ -982,9 +982,9 @@ function PipelineDiagram() {
 
       {/* Base model */}
       <rect x="20" y="60" width="100" height="60" rx="8" fill="var(--surface-2)" stroke="var(--fg2)" strokeWidth="1.5" />
-      <text x="70" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--fg2)">BASE</text>
+      <text x="70" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">BASE</text>
       <text x="70" y="100" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--foreground)">Llama-3.1-8B</text>
-      <text x="70" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">unsloth mirror</text>
+      <text x="70" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">unsloth mirror</text>
 
       <line x1="120" y1="90" x2="160" y2="90" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#arrowPipe)" />
 
@@ -992,7 +992,7 @@ function PipelineDiagram() {
       <rect x="160" y="60" width="120" height="60" rx="8" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.5" />
       <text x="220" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent)">STAGE 1</text>
       <text x="220" y="100" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">SFT</text>
-      <text x="220" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">JSON · register</text>
+      <text x="220" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">JSON · register</text>
 
       <line x1="280" y1="90" x2="320" y2="90" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#arrowPipe)" />
 
@@ -1000,7 +1000,7 @@ function PipelineDiagram() {
       <rect x="320" y="60" width="120" height="60" rx="8" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.5" />
       <text x="380" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent)">STAGE 2</text>
       <text x="380" y="100" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">GRPO</text>
-      <text x="380" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">env reward</text>
+      <text x="380" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">env reward</text>
 
       <line x1="440" y1="90" x2="480" y2="90" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#arrowPipe)" />
 
@@ -1008,7 +1008,7 @@ function PipelineDiagram() {
       <rect x="480" y="60" width="120" height="60" rx="8" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.5" />
       <text x="540" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent)">STAGE 3</text>
       <text x="540" y="100" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">DPO</text>
-      <text x="540" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">RLAIF · Claude</text>
+      <text x="540" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">RLAIF · Claude</text>
 
       <line x1="600" y1="90" x2="640" y2="90" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#arrowPipe)" />
 
@@ -1016,12 +1016,12 @@ function PipelineDiagram() {
       <rect x="640" y="60" width="100" height="60" rx="8" fill="var(--surface-2)" stroke="var(--accent-2)" strokeWidth="1.5" />
       <text x="690" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent-2)">SHIPPED</text>
       <text x="690" y="100" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">Sauda v3</text>
-      <text x="690" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">on HF</text>
+      <text x="690" y="113" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">on HF</text>
 
       {/* Below labels */}
-      <text x="220" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">loss 2.14 → 0.10</text>
-      <text x="380" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">surplus +13%</text>
-      <text x="540" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">prose polish</text>
+      <text x="220" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">loss 2.14 → 0.10</text>
+      <text x="380" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">surplus +13%</text>
+      <text x="540" y="148" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">prose polish</text>
     </svg>
   );
 }
@@ -1051,15 +1051,15 @@ function RLAIFDiagram() {
       {/* Two rollouts */}
       <rect x="10" y="20" width="100" height="36" rx="6" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.2" />
       <text x="60" y="34" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--foreground)">rollout A</text>
-      <text x="60" y="48" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">temp 0.5</text>
+      <text x="60" y="48" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">temp 0.5</text>
 
       <rect x="10" y="64" width="100" height="36" rx="6" fill="var(--surface-2)" stroke="var(--accent-2)" strokeWidth="1.2" />
       <text x="60" y="78" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--foreground)">rollout B</text>
-      <text x="60" y="92" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">temp 0.9</text>
+      <text x="60" y="92" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">temp 0.9</text>
 
       {/* Claude judge */}
       <rect x="160" y="40" width="100" height="44" rx="6" fill="var(--surface-2)" stroke="var(--fg2)" strokeWidth="1.5" />
-      <text x="210" y="58" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--fg2)">JUDGE</text>
+      <text x="210" y="58" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">JUDGE</text>
       <text x="210" y="74" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--foreground)">Claude</text>
 
       <line x1="110" y1="38" x2="160" y2="55" stroke="var(--fg2)" strokeWidth="1" markerEnd="url(#arrowR)" />
@@ -1077,7 +1077,7 @@ function RLAIFDiagram() {
       {/* DPO trainer */}
       <rect x="80" y="130" width="200" height="36" rx="6" fill="var(--surface-2)" stroke="var(--accent)" strokeWidth="1.5" />
       <text x="180" y="148" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--accent)">trl.DPOTrainer</text>
-      <text x="180" y="160" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--fg2)">on top of v2 SFT+GRPO</text>
+      <text x="180" y="160" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">on top of v2 SFT+GRPO</text>
 
       <line x1="320" y1="92" x2="280" y2="130" stroke="var(--fg2)" strokeWidth="1" markerEnd="url(#arrowR)" />
     </svg>
