@@ -291,6 +291,7 @@ async def root():
   <nav>
     <div class="brand"><span class="dot"></span>BazaarBATNA</div>
     <div class="links">
+      <a href="https://bazaar-batna.vercel.app/" target="_blank"><strong>Play →</strong></a>
       <a href="#results">Results</a>
       <a href="#environment">Environment</a>
       <a href="#api">API</a>
@@ -311,7 +312,8 @@ async def root():
         <span class="badge">8 tasks · 4 personas</span>
       </div>
       <div class="ctas">
-        <a class="btn primary" href="https://github.com/paymybills/BazaarBATNA" target="_blank">GitHub repo →</a>
+        <a class="btn primary" href="https://bazaar-batna.vercel.app/" target="_blank">Play Sauda live →</a>
+        <a class="btn ghost" href="https://github.com/paymybills/BazaarBATNA" target="_blank">GitHub repo</a>
         <a class="btn ghost" href="https://huggingface.co/PayMyBills/bestdealbot-v2" target="_blank">Sauda v2 adapter</a>
         <a class="btn ghost" href="https://github.com/paymybills/BazaarBATNA/blob/main/docs/BLOG.md" target="_blank">Hackathon journal</a>
         <a class="btn ghost" href="/docs">Interactive API docs</a>
