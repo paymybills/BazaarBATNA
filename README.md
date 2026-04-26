@@ -43,13 +43,17 @@ A clean controlled comparison: same seller (Gemma-4-E4B), same seeds, same tasks
 | Llama-3.2-3B base | 0.722 | 0.731 | 0.258 | **0.570** | 1.00 | 2.2 |
 | Llama-3.1-8B base | 0.818 | 0.787 | 0.430 | **0.678** | 0.99 | 3.1 |
 | **Sauda v2** (8B SFT+GRPO) | **0.835** | **0.827** | **0.521** | **0.728** | 0.91 | 6.0 |
+| **Sauda v3** (v2 + DPO/RLAIF, n=10*) | 0.820 | 0.807 | 0.457 | 0.695 | **1.00** | 3.5 |
+
+\* v3 was trained on **6 Claude-judged preference pairs** in the final hour and evaluated at smaller n=10 due to the time budget. Smoke eval, directional only.
 
 **Reading this:**
 - Scaling 3B → 8B base buys you +19% mean surplus.
-- Training on top of 8B (SFT+GRPO) buys you another +7% AND ~2x longer negotiations. Base models capitulate fast (2-3 rounds); Sauda actually plays the game.
+- Training on top of 8B (SFT+GRPO) buys you another +7% AND ~2× longer negotiations. Base models capitulate fast (2-3 rounds); Sauda actually plays the game.
 - Sauda's deal rate (0.91) is a feature, not a bug — Sauda walks when offers are bad. Base models close any deal regardless of value.
+- **v3 trade-off:** 6 preference pairs nudge the policy toward closing — deal rate 0.91 → 1.00 and rounds 6.0 → 3.5, at slight surplus cost. With more pairs (target was 30) we'd expect surplus to recover or surpass v2 while keeping the closing behavior. **The pipeline works end-to-end** — pairs durable on [`ankur-1232/dpo-pairs`](https://huggingface.co/datasets/ankur-1232/dpo-pairs), adapter at [`ankur-1232/bestdealbot-v3`](https://huggingface.co/ankur-1232/bestdealbot-v3).
 
-Datasets: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs)
+Datasets: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs) (v2 ladder) · [`ankur-1232/sauda-eval-runs`](https://huggingface.co/datasets/ankur-1232/sauda-eval-runs) (v3 smoke)
 
 ### Seller quality — 5 of 6 acceptance criteria pass
 
