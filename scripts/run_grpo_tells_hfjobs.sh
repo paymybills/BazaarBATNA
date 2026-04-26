@@ -51,7 +51,11 @@ if [ -z "${USERNAME:-}" ] && [ -z "${SFT_HF_REPO:-}" ] && [ -z "${REPO_ID:-}" ] 
         exit 1
     fi
 fi
-SFT_HF_REPO="${SFT_HF_REPO:-${USERNAME}/bestdealbot-v2-tells}"
+# sft.py pushes with a "-sft" suffix; grpo.py pushes to the canonical name.
+# So the SFT-tells adapter lives at <user>/bestdealbot-v2-tells-sft, and
+# this GRPO step consumes from there and writes the final SFT+GRPO adapter
+# to <user>/bestdealbot-v2-tells.
+SFT_HF_REPO="${SFT_HF_REPO:-${USERNAME}/bestdealbot-v2-tells-sft}"
 REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
 RESULTS_REPO="${RESULTS_REPO:-${USERNAME}/grpo-tells-runs}"
 
