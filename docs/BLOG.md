@@ -36,29 +36,7 @@ I committed the fix. I committed it again because the first commit was wrong. Th
 
 *(I want to clarify something before we keep going. I said "I" up there. The way I am writing this blog, "I" am one person, the engineer, the protagonist, the chump. In reality there are two of us, plus a hackathon's worth of code, plus a model that is at this exact moment generating text I will need to debug in approximately fifteen minutes. The "I" is a narrative simplification. The bugs are real.)*
 
-## the dependency hell era
-
-I tried to install bitsandbytes on Kaggle. Kaggle said no.
-
-This is the abridged commit history of that single afternoon:
-
-```
-b419c4e Fix HF auth: pin huggingface_hub>=0.27 + drop login() in favor of env vars
-ca6acbd Pin huggingface_hub>=0.34 + transformers>=4.50; require kernel restart after install
-81f9341 Pin to known-good versions: transformers 4.46.3 + huggingface_hub 0.34.4; uninstall first
-800e519 Rollback train.ipynb to last working notebook (commit 55d5267); drop dep-pinning experiments
-419e75b Cell 2: clear pip cache + pinned versions, require kernel restart
-dfecd85 Bump bitsandbytes 0.44.1 → 0.45.1 (fixes triton.ops removal)
-b710e72 Pin triton==2.3.1 + bnb==0.44.1 (avoids Kaggle libstdc++ ABI mismatch)
-```
-
-**Seven dependency commits in a row.** Six of them rolled back the previous one. At one point I bumped bitsandbytes from 0.44.1 to 0.45.1 because triton 3.0 removed `triton.ops` and 0.44.1 imported it. Then 0.45.1 hit a different bug because Kaggle's libstdc++ was too old for the symbols 0.45.1 wanted (`GLIBCXX_3.4.32 not found`). Then I rolled back to 0.44.1 and pinned triton to 2.3.1 to avoid the `triton.ops` removal entirely.
-
-I shouted "should I just colab this bitch" into the chat. We switched to Colab.
-
-*(That line is real. It is in our chat history. I am not paraphrasing. If you ever need to know whether someone is having a bad time, listen for the word "bitch" applied to a piece of cloud infrastructure. It is diagnostic.)*
-
-> **Lesson from the trenches #2**: Kaggle is a sandbox. Sandboxes have rules. When the sandbox loses, the sandbox doesn't tell you it lost. It just hangs forever during cell 4 and you wonder if your wifi is broken.
+There was a brief Kaggle dependency-hell era I will not recap because nobody learns anything from "I rolled back bitsandbytes 0.45.1 because it wanted GLIBCXX_3.4.32 that Kaggle didn't have." We switched to Colab. Onward.
 
 ## the seller is a real character now
 
@@ -69,29 +47,17 @@ We had a seller. Gemma-4-E4B with persona prompts. The seller had four hard rule
 3. Counter offers always >= reservation
 4. Counter must improve toward buyer
 
-I ran the seller-quality eval. Gemma walked away on round 1. **Every episode.** Buyer says "39 chalega bhai?" Seller says "Walk."
+I ran the seller-quality eval. Gemma walked away on round 1. Every episode. 50 walks, 0 deals.
 
-The walk threshold was `< reservation * 0.8`. Reservation was usually $78 on a $100 listing. Buyers open at 30-40% of ask, which is $30-40, which is way under $62. Walk. Walk. Walk. 50 episodes, 50 walks, 0 deals.
+The walk threshold was too aggressive. I fixed it. Now Gemma never walked. Every episode expired at round 8 because the eval buyer plateaued at 74% of ask while reservation was 78%. The buyer was *literally physically incapable* of reaching the price the seller could accept. I fixed that. Now Gemma reached the right offers but still wouldn't say accept — because the LLM doesn't *know* what the reservation is (we don't put it in the prompt; we don't want it leaked). It would just keep countering its way past reservation forever.
 
-Commit `4adc665: Fix LLMSeller premature walk: counter low offers, walk only as last resort`.
+Commit `ef753a6: Auto-accept when buyer offer ≥ reservation (LLM doesn't know the floor, would keep countering)`. If the buyer's offer is already above reservation, force `action="accept"`.
 
-I re-ran the eval. Gemma now never walked. **Every episode expired at round 8.** Buyers couldn't reach reservation because the eval buyer's price-progression formula plateaued at 74% of ask, and reservations were 78% of ask. The buyer was *literally physically incapable* of reaching the price the seller could accept.
+Three commits to get the seller to accept a deal. *Three.* The buyer is a whole separate adventure.
 
-Commit `9335805: Fix eval buyer: was plateauing at ~74% of ask, never reaching 78% reservation`. Bumped the step size. The buyer now reaches 95% of ask by round 7.
+*(This is the moment I quietly promise the reader we'll come back to. The buyer's eval numbers were measured against this seller. The seller just got a lot smarter. Hold this thought.)*
 
-I re-ran the eval. The seller still wasn't accepting. I traced through the LLM call — the seller was looking at a perfectly good offer and saying `{"action": "counter", "price": 32}` because the *LLM doesn't know what the reservation is*. The reservation is in code, not in the prompt (because we don't want to leak it).
-
-Commit `ef753a6: Auto-accept when buyer offer ≥ reservation (LLM doesn't know the floor, would keep countering)`. If the LLM proposes a counter above the buyer's offer, but the buyer's offer is already above reservation, force `action="accept"`.
-
-Three commits to get the seller to accept a deal. *Three.* And this is just the seller. The buyer is whole separate adventure.
-
-*(Side note for the reader: if you are wondering whether I am going to get to the buyer adventure, the answer is "yes but not yet." The seller has to work first. Otherwise the buyer's eval numbers are measured against a seller that doesn't enforce its own rules and the buyer looks like a genius until you fix the seller and then the buyer looks like a person who got lucky. We will get to the moment where this exact thing happens. Stay with me.)*
-
-> **Lesson from the trenches #3**: An LLM that doesn't know its own constraints can't enforce them. If the constraint is "don't reveal X," the LLM has to know X to avoid revealing X. If the constraint is "always accept when buyer's offer is good enough," the LLM has to know what "good enough" means or it will keep negotiating against itself forever.
-
-The eval ran. **Five out of six metrics passed.** The one that didn't was `persona_consistency`, which is when we feed Gemma its own transcript and ask it which persona it was playing, and Gemma scores 38% across four classes. Forty-eight points above random, which sounds great, until you remember "default" and "flexible" are linguistically almost identical and the only way to truly distinguish them is to run a logistic regression on adjective frequency, which Gemma is not doing.
-
-We left it. The metric is structurally cursed. Self-judging without temperature pinned to 0 is unreliable. The 5/6 result is honest and we report it as such.
+The eval ran clean: **5 of 6 metrics passed.** The 6th (`persona_consistency`) is Gemma classifying its own persona from a transcript across four overlapping classes. It scores 38%. The metric is structurally cursed and we ship it anyway because hiding it would be worse.
 
 ## sauda v1 and the seller that was secretly garbage
 
@@ -117,7 +83,7 @@ I did `git log` on the seller code between the two evals. There was the auto-acc
 
 The lower number is the more honest number. The 0.91 was inflated by a leaky seller that didn't enforce its own reservation. The 0.52 is what a buyer captures against a seller that actually plays.
 
-> **Lesson from the trenches #4**: If you fix the opponent mid-experiment, every old number is now a different benchmark. Tag the eval with the opponent's git SHA. Better yet, snapshot the opponent into a versioned model file. Otherwise your old screenshots are lying to you and you don't know they're lying because they're *your* screenshots.
+> **Lesson from the trenches #2**: If you fix the opponent mid-experiment, every old number is now a different benchmark. Tag the eval with the opponent's git SHA. Better yet, snapshot the opponent into a versioned model file. Otherwise your old screenshots are lying to you and you don't know they're lying because they're *your* screenshots.
 
 We left both numbers in the README. The full story is more interesting than either number alone. We also added a section called "the amazon_realistic regression" which is just a `git log -p bazaarbot_env/llm_seller.py af7b31d..HEAD` and a paragraph explaining what happened.
 
@@ -141,27 +107,13 @@ I started panicking. I opened a second terminal to check `nvidia-smi` on the HF 
 
 Diagnosis: Python's stdout is full-buffered (not line-buffered) when stdout isn't a tty. HF Jobs runs without a tty. Every `print()` was sitting in a 4KB buffer waiting for the process to exit. The job was *fine*. It was running attempts. It just couldn't tell us.
 
-Commit `2728bf7: Force unbuffered stdout in HF Jobs scripts`. Added `python -u`. Added `flush=True` to every print I cared about.
+Commit `2728bf7: Force unbuffered stdout in HF Jobs scripts`. Added `python -u`. Added `flush=True` to every print I cared about. The job had been working the entire time. It just couldn't tell anyone.
 
-> **Lesson from the trenches #5**: `print` does not always print. It almost always prints. It usually prints. It prints in 99 of 100 contexts. The 1 context is the context you are currently in. Always `python -u`.
+### Smoke v2: gated repo (the warm-up)
 
-### Smoke v2: gated repo
+The HF token in the job container didn't have Llama 3.1 license access. The token I'd done the original SFT on did, on a different account. Switched to `unsloth/Meta-Llama-3.1-8B-Instruct`, an ungated public mirror with byte-identical weights. The adapter loaded on top fine because PEFT cares about architecture, not repo name.
 
-I fired smoke v2. Logs streamed in real-time now. Beautiful. They said:
-
-```
-403 Client Error. Cannot access gated repo for url
-https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct/resolve/main/config.json.
-You are not in the authorized list.
-```
-
-The HF token plumbed into the job container did not have Llama 3.1 access. *Even though the original SFT had run on Llama 3.1.* The original SFT had used my personal HF account that had Llama 3.1 approval. The job container was using a project token that did not.
-
-I could have fixed this by clicking through the Meta Llama 3.1 license again on a different account, but I was tired and they want your name and your "Use case" and the dropdown was 30 items long. So instead I switched to `unsloth/Meta-Llama-3.1-8B-Instruct`, which is a public ungated mirror with byte-identical weights.
-
-Commit `53940dc: Switch base model defaults to unsloth mirrors (ungated)`. Done. Adapter loads on top of unsloth base because PEFT cares about architecture not repo name.
-
-> **Lesson from the trenches #6**: Gated models are a tax that everyone pays differently. Your token is fine. Your colleague's token is fine. The token in your CI is *not* fine. The unsloth mirror is the unblocker. Use it.
+This was the easy bug.
 
 ### Smoke v3: the EOS bug, oh my god the EOS bug
 
@@ -190,17 +142,11 @@ I sat there. I thought about every wall-clock estimate I had given my teammate i
 
 *(If you remember nothing else from this blog, remember this section. This is the most important paragraph. This is the paragraph where, if it lands for one person, the blog has paid for itself. `eos_token_id` as a list. Pass it. Today.)*
 
-> **Lesson from the trenches #7**: Modern instruction-tuned models have multiple end-of-turn tokens. The default tokenizer config does not always wire them all in. If your generation runs to `max_new_tokens` every time, this is your bug. Pass `eos_token_id` as a list. Now. Today. Before reading the next paragraph of this blog.
+> **Lesson from the trenches #3**: Modern instruction-tuned models have multiple end-of-turn tokens. The default tokenizer config does not always wire them all in. If your generation runs to `max_new_tokens` every time, this is your bug. Pass `eos_token_id` as a list. Now. Today. Before reading the next paragraph of this blog.
 
-### Smoke v4: 4-bit is slow, this is fine, this is not fine
+### Smoke v4: 4-bit is slow
 
-EOS fixed. Generates were now ~10s each. Still too slow. We had been running with `BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4')` because everyone defaults to it because "VRAM is precious."
-
-A10G-large has 80GB. Llama-3.1-8B in bf16 is 16GB. We were optimizing VRAM that we did not need to optimize. The 4-bit dequantization step on every forward pass adds substantial latency. Not the kind that shows up in benchmarks. The kind that compounds across 200 generates per pair-build.
-
-Commit `1ccb2c1: 3B pair-build buyer + bf16 dtype hatch (overnight smoke fix)`. Made `BUYER_DTYPE` and `SELLER_DTYPE` env-vars. Default bf16. Generates now ~3s.
-
-> **Lesson from the trenches #8**: 4-bit is not free. It is a tax you pay in compute time so you can fit on a smaller GPU. If you have the VRAM, run bf16. If you do not, run 4-bit, but know you are paying for it.
+After EOS, generates were 10s each. Still too slow. We were loading the buyer in 4-bit because that's the default everyone uses to fit small GPUs. But we were on a10g-large with 80GB of VRAM and an 8B model in bf16 fits in 16GB with massive headroom. The 4-bit dequant step on every forward pass adds latency that compounds across 200 generates per pair. Switched to bf16. Generates dropped to 3s. Moving on.
 
 ### Smoke v5: the judge that judged everything as a tie
 
@@ -226,53 +172,17 @@ The heuristic had been written six weeks ago. It had never been tested against a
 
 Commit `f496128: Fix heuristic judge: recognise either side's accept + soft tiebreak`. Made `share()` accept either side's accept. Added a soft tiebreak: if neither rollout closes, rank by who pushed the seller's final counter lower.
 
-> **Lesson from the trenches #9**: Write your fallbacks against real data. Specs lie. Specs say "the buyer accepts the deal." Real data says "the seller accepts because the buyer's offer hit reservation and the LLM seller doesn't know to reach for the accept action."
+> **Lesson from the trenches #4**: Write your fallbacks against real data. Specs lie. Specs say "the buyer accepts the deal." Real data says "the seller accepts because the buyer's offer hit reservation and the LLM seller doesn't know to reach for the accept action."
 
-### Smoke v6: the loop that ran exactly once
+### Smoke v6 onwards: the part where I started this blog
 
-I built a scaling-ladder eval to compare 3B base, 8B base, and Sauda v2. The ladder was three rows in a bash variable:
-
-```bash
-LADDER="llama_3b_base|unsloth/Llama-3.2-3B-Instruct|-|0
-llama_8b_base|unsloth/Meta-Llama-3.1-8B-Instruct|-|0
-sauda_8b_v2|unsloth/Meta-Llama-3.1-8B-Instruct|PayMyBills/bestdealbot-v2|1"
-
-echo "$LADDER" | while IFS='|' read -r LABEL BASE ADAPTER STEER; do
-    python eval_harness.py --hf_base "$BASE" ...
-done
-```
-
-This looks fine. **It is not fine.**
-
-The pipe creates a subshell. The Python call inside the loop reads from stdin (or something else triggers EOF on the pipe). After the first iteration, `read` got EOF and the loop exited. **The job ran exactly one of the three rows.** Then it ran the post-processing pipeline that aggregated "all" the rows into a `scaling_summary.json` containing one row, and uploaded that to HF, and exited cleanly.
-
-I checked HF. The summary said:
-
-```
-| llama_3b_base | 0.570 | 1.00 | 2.2 | 90 |
-```
-
-One row. **Where are my other two rows.**
-
-I was so confused. I re-fired the same script with the same code thinking maybe it was a transient. Same result. One row. I lost an hour to this.
-
-Commit `55c6841: Fix scaling ladder: loop only ran first row`. Fed the LADDER via heredoc instead of pipe. Redirected Python's stdin to /dev/null. The loop ran in the parent shell. All three rows fired.
-
-> **Lesson from the trenches #10**: `echo X | while read` is shell trivia that has been waiting to bite you for ten years. Use a heredoc. `done <<EOF / $X / EOF`. Or `<<<` if it fits on one line. Pipe-fed `while read` is a footgun in a tutorial.
-
-### Smoke v7-8: the part where I gave up and started writing this blog
+I'll skip v6 (a `echo $X | while read` shell-trivia bug that ate an hour and isn't worth re-living) and v7 (cancelled before it produced anything useful).
 
 By midnight Saturday I had cancelled four DPO smokes and re-fired three. The HF Jobs dashboard showed `69ecdc20`, `69ece351`, `69ece4b0`, `69ece6a5`, `69ecef4c`, `69ecf12e`, `69ecf269` — all cancelled, all my fault.
 
-I fired smoke v8 with the heuristic fix and bf16 and the EOS fix and `python -u` and `unsloth/Meta-Llama-3.1-8B-Instruct` and `max_rounds=8` and the proper buyer adapter.
-
-It started running. It is, as of this writing, on attempt 2. Two attempts in 35 minutes. We are going to see how this goes.
-
 We pivoted. **Sauda v2 is on HF. The seller-quality eval is solid. The env works. v3-dpo is gravy.**
 
-I redirected the night's compute to an overnight scaling-ladder eval (with the heredoc fix this time) and a tells ablation. Both completed. Real numbers below.
-
-> **Lesson from the trenches #11**: A pipeline that mostly works is more valuable than a pipeline that fully works in two hours. Ship the mostly-works version with reproducible scripts and a footnote. The judges read code. The footnote is part of the story.
+I redirected the night's compute to an overnight scaling-ladder eval and a tells ablation. Both completed. Real numbers below.
 
 ## the ablation that disproved my own hypothesis
 
@@ -303,7 +213,33 @@ There are honest reasons this could be:
 
 **I am not going to bury this result.** The whole point of an ablation is to be willing to be wrong. Future work: train Sauda *with* tells in-loop. Until then, the headline finding is "we built a feature that doesn't help" and that is fine because we *measured* it instead of assuming.
 
-> **Lesson from the trenches #12**: If you don't test the feature, the feature works. If you test the feature, sometimes the feature does not work. Test the feature. The feature not working is the second-best outcome because you can fix it.
+> **Lesson from the trenches #5**: If you don't test the feature, the feature works. If you test the feature, sometimes the feature does not work. Test the feature. The feature not working is the second-best outcome because you can fix it.
+
+## the arena: in which a 3B model paid full asking price three times in a row
+
+The arena is a side feature where four buyers — Aggressive (rule), Smart heuristic (rule), Llama-3.2-3B (prompted base), Bestdealbot (Sauda v1) — bid on the same listing and we watch how each closes. We pre-computed three scenarios as a static demo because running four LLMs concurrently doesn't fit in one A10G.
+
+Running them offline to fill the demo, I watched Llama-3.2-3B do something I had not seen a model do before. Round 1, listing at ₹40,000, seller reservation ₹32,000:
+
+- Aggressive offers ₹22,000.
+- Smart heuristic offers ₹26,000.
+- Bestdealbot (v1) offers ₹24,500.
+- **Llama-3.2-3B offers ₹28,000.**
+
+Round 2, seller counters at ₹36,000:
+
+- Aggressive walks.
+- Smart heuristic counters at ₹30,000.
+- Bestdealbot counters at ₹28,000.
+- **Llama-3.2-3B accepts at ₹36,000.**
+
+Two rounds. No real negotiation. Llama paid ₹4,000 above seller reservation when every other buyer in the arena was trying to push *under* it. I checked the next two scenarios. Same pattern. Llama accepted in round 2 of the scooter shootout (₹55,000 vs Bestdealbot's ₹52,500 final offer). Llama accepted in round 2 of the dining-table bid (₹360 vs reservation ₹310).
+
+**Three scenarios. Three near-instant accepts.** This is what a base model does on a negotiation task: it treats "be agreeable" as the dominant strategy because the prompt asks it to be a buyer and "yes" is what helpful assistants say to buyers. There is no concept of bargaining surplus. There is no concept of reservation. There is only the chat trained into the weights, and the chat says: come to an agreement.
+
+This is also, incidentally, why the scaling ladder is interesting. The 8B base model in the same arena pushes back more than the 3B. Sauda — which was *trained* on the env's reward signal — pushes back more than the 8B. **The training is doing real work; you can see it in how often the buyer says "no."**
+
+The arena's per-buyer trace strip on `/arena` was originally rendering all four buyers' bars at the same length, which made the "Llama capitulated in round 1" beat invisible. We fixed it: a buyer's bar now visibly ends at the round it accepted or walked, with a small marker on the exit segment. Now you can see the capitulation at a glance, the way it played out for me when I ran it offline at 2am and laughed.
 
 ## the buyer that walked back its own agreement
 
@@ -342,7 +278,7 @@ The fix is well-understood: the buyer's `format_observation` only gives current-
 
 We did not fix this. It is on the future-work list. The transcript is going in the README as Exhibit A.
 
-> **Lesson from the trenches #13**: A buyer with no memory will agree, walk away, and re-agree on every turn. This is not negotiation. This is goldfish theater. Pipe the last 2-3 turns into the obs. Or train the buyer on multi-turn coherence as a metric. Or both.
+> **Lesson from the trenches #6**: A buyer with no memory will agree, walk away, and re-agree on every turn. This is not negotiation. This is goldfish theater. Pipe the last 2-3 turns into the obs. Or train the buyer on multi-turn coherence as a metric. Or both.
 
 ## what exists right now (as I type this)
 
@@ -366,22 +302,16 @@ The DPO smoke is running. The HF Inference Endpoint for the live `/sell` buyer n
 
 ## the running lessons list
 
-These are the lessons so far, all from the receipts above. The rule of this blog is that nothing on this list is hypothetical — each item has its own bug story, its own commit, its own moment where I sat at the laptop and made the face you make when you realize what you have done.
+The six numbered lessons above are the ones that survived editing. There were thirteen at one point. Several of them turned out to be variations on the same lesson, or just shell trivia that wasn't worth a quote block. These six are the ones I would still hand to past-me at the start of the project:
 
-- Pin the opponent. Snapshot the seller version when reporting buyer metrics. Tag every eval with the opponent's git SHA.
-- Test inference loop speed before building any training pipeline that depends on it. If your generates are 30s, you have no debug signal for anything else.
-- Run the ablation early. We would have known the tells channel didn't help on day 2 instead of day 6 and we would have re-prioritized.
-- Write the heuristic judge against real transcripts, not against the spec. The spec lies.
-- `python -u` from day one. `eos_token_id` as a list from day one. `BUYER_DTYPE=bf16` from day one. Save yourself the cycles.
-- Don't `echo "$X" | while read`. Use a heredoc.
-- When the model speaks Korean, it is gradient checkpointing during inference. Always.
-- When the seller walks on round 1, the walk threshold is too low.
-- When the buyer walks on round 8, the buyer's offer trajectory plateaus before reservation.
-- When the LLM says `{"action": "counter", "price": $reservation+1}` and you wanted accept, the LLM doesn't know reservation exists.
-- When you fix the seller, every old buyer number is now meaningless.
-- When the heuristic returns "tie" 30 times in a row, the heuristic is wrong, not the model.
+- **#1** — SFT is the easiest part of the trilogy. Inference is where the bugs live.
+- **#2** — Pin the opponent. Snapshot the seller. Otherwise old screenshots lie about a different game.
+- **#3** — Modern instruction-tuned models have multiple end-of-turn tokens. Pass `eos_token_id` as a list.
+- **#4** — Write your fallbacks against real data. Specs lie about which side accepts.
+- **#5** — Test the feature. The feature not working is the second-best outcome because you can fix it.
+- **#6** — A buyer with no memory will agree, walk away, and re-agree on every turn. Multi-turn coherence is a training objective, not a runtime hope.
 
-*(This list will grow today. I can feel it.)*
+There are also smaller diagnostic shorthands the project taught me — when the model speaks Korean it's gradient checkpointing during inference, when the heuristic returns "tie" thirty times in a row it's the heuristic, when the seller walks on round 1 the walk threshold is too low — but those are tips, not lessons.
 
 ---
 
@@ -389,6 +319,4 @@ These are the lessons so far, all from the receipts above. The rule of this blog
 
 *Sauda v2 has accepted 91% of the deals it should have, walked away from 9% it shouldn't have taken, and at one point told a seller "32 mein de dijiye?" and then five turns later said "okay 27 — bas yahi ceiling hai." We are still investigating what happened in those five turns. We suspect goldfish theater.*
 
-*If any part of this post saves you from any of the bugs in this post, it has paid for itself. If you have made any of these bugs yourself, you are not alone. The thirteen lessons are scattered above like land mines. They are also all in the commit history. They are all real. None of them are fictionalized. The agent is named Sauda. The blog post is named after a sentence I said out loud at 4am.*
-
-*Reader: I am closing this tab now and going back to work. There is a website to wire, an endpoint to deploy, a smoke to babysit. I will be back. Probably with more lessons. Definitely with more commits. The post will keep growing for as long as the bugs do, which is to say, forever.*
+*Reader: I am closing this tab now and going back to work. There is a website to wire, an endpoint to deploy, a smoke to babysit. I will be back. Probably with another section, possibly with another lesson. The post will keep growing for as long as the build does.*

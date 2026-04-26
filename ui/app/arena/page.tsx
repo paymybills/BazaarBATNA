@@ -79,23 +79,40 @@ export default function ArenaPage() {
   const visibleRounds = scenario?.rounds.slice(0, round + 1) ?? [];
   const isFinal = scenario && round >= totalRounds - 1;
 
-  // Aggregate per-buyer running price for the chart-strip
+  // Aggregate per-buyer trace for the chart-strip. Each segment carries
+  // both the price (if any) and the action so the renderer can show
+  // walked/accepted lifecycles correctly — otherwise every buyer's bar
+  // looks identical because all scenarios are the same number of rounds.
+  type Seg = { price: number | null; action: string | null };
   const buyerLines = useMemo(() => {
-    if (!scenario) return [] as { id: string; label: string; color: string; prices: (number | null)[] }[];
+    if (!scenario) return [] as { id: string; label: string; color: string; segs: Seg[]; finalRound: number; finalAction: string | null }[];
     const buyerIds = Array.from(
       new Set(scenario.rounds.flatMap((r) => r.actions.map((a) => a.buyer)))
     );
     return buyerIds.map((bid) => {
       const sample = scenario.rounds[0].actions.find((a) => a.buyer === bid);
       const label = sample?.label ?? bid;
-      return {
-        id: bid,
-        label,
-        color: BUYER_COLORS[bid] ?? "var(--foreground)",
-        prices: scenario.rounds.map(
-          (r) => r.actions.find((a) => a.buyer === bid)?.price ?? null
-        ),
-      };
+      const segs: Seg[] = scenario.rounds.map((r) => {
+        const a = r.actions.find((act) => act.buyer === bid);
+        return {
+          price: a?.price ?? null,
+          action: (a?.action ?? null) as string | null,
+        };
+      });
+      // Find the buyer's final live round (the one where they accepted/walked,
+      // or the last offer if they survived to the end). Subsequent rounds get
+      // rendered as "out of game".
+      let finalRound = segs.length - 1;
+      let finalAction: string | null = null;
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        if (s.action === "accept" || s.action === "walk") {
+          finalRound = i;
+          finalAction = s.action;
+          break;
+        }
+      }
+      return { id: bid, label, color: BUYER_COLORS[bid] ?? "var(--foreground)", segs, finalRound, finalAction };
     });
   }, [scenario]);
 
@@ -223,35 +240,93 @@ export default function ArenaPage() {
             <div className="rounded-xl border border-border bg-surface p-5">
               <div className="text-eyebrow mb-4">Per-buyer trace</div>
               <div className="space-y-3">
-                {buyerLines.map((line) => (
-                  <div key={line.id}>
-                    <div className="flex items-center justify-between mb-1.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ background: line.color }}
-                        />
-                        <span className="text-foreground">{line.label}</span>
-                      </div>
-                      <span className="font-mono text-fg2 tabular-nums">
-                        {line.prices[round] !== null ? `$${line.prices[round]}` : "—"}
-                      </span>
-                    </div>
-                    <div className="flex gap-1">
-                      {line.prices.map((p, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 h-1 rounded-full transition-colors ${
-                            i === round ? "" : "opacity-30"
+                {buyerLines.map((line) => {
+                  const cur = line.segs[round];
+                  const isOutOfGame = round > line.finalRound;
+                  const priceLabel = isOutOfGame
+                    ? line.finalAction === "accept"
+                      ? "accepted"
+                      : line.finalAction === "walk"
+                      ? "walked"
+                      : "—"
+                    : cur?.price !== null && cur?.price !== undefined
+                    ? `$${cur.price}`
+                    : cur?.action === "accept"
+                    ? "accepted"
+                    : cur?.action === "walk"
+                    ? "walked"
+                    : "—";
+                  return (
+                    <div key={line.id}>
+                      <div className="flex items-center justify-between mb-1.5 text-xs">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: line.color }}
+                          />
+                          <span className="text-foreground">{line.label}</span>
+                        </div>
+                        <span
+                          className={`font-mono tabular-nums ${
+                            isOutOfGame
+                              ? line.finalAction === "accept"
+                                ? "text-bad"
+                                : "text-fg3"
+                              : "text-fg2"
                           }`}
-                          style={{
-                            background: p === null ? "var(--fg4)" : line.color,
-                          }}
-                        />
-                      ))}
+                        >
+                          {priceLabel}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        {line.segs.map((s, i) => {
+                          const past = i < round;
+                          const live = i === round;
+                          const future = i > round;
+                          const after = i > line.finalRound;
+                          // Three visual states:
+                          //   - past, in-lifecycle: full color, dim
+                          //   - live, in-lifecycle: full color
+                          //   - future, in-lifecycle: low opacity color (will play)
+                          //   - after lifecycle ended (accept/walk): grey, faint
+                          const dim = past ? "opacity-50" : live ? "" : future ? "opacity-25" : "";
+                          const bg = after
+                            ? "var(--fg4)"
+                            : s.price === null
+                            ? s.action === "walk"
+                              ? "var(--bad)"
+                              : s.action === "accept"
+                              ? "var(--bad)"
+                              : "var(--fg4)"
+                            : line.color;
+                          // Render a thin "X" mark on the segment where the
+                          // buyer accepted/walked so the lifecycle is legible.
+                          const isExitSeg = i === line.finalRound && line.finalAction !== null;
+                          return (
+                            <div
+                              key={i}
+                              className={`flex-1 h-1 rounded-full transition-colors ${dim} ${
+                                isExitSeg ? "ring-1 ring-bad" : ""
+                              }`}
+                              style={{ background: bg }}
+                              title={
+                                after
+                                  ? `out: ${line.finalAction}`
+                                  : s.action === "accept"
+                                  ? `accepted at $${s.price ?? "?"}`
+                                  : s.action === "walk"
+                                  ? "walked"
+                                  : s.price !== null
+                                  ? `offer $${s.price}`
+                                  : ""
+                              }
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
