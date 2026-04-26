@@ -120,10 +120,10 @@ html.lenis, html.lenis body { height: auto; }
   --foreground-4: #d4d4d8;
 
   --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --surface-3: #e4e4e7;
-  --border: #e4e4e7;
-  --border-2: #d4d4d8;
+  --surface-2: #e4e4e7;
+  --surface-3: #d4d4d8;
+  --border: #d4d4d8;
+  --border-2: #a1a1aa;
 
   /* Darken accents for readable contrast on white */
   --accent: #4d7c0f;       /* olive — readable on white, still "live" coded */
