@@ -109,6 +109,30 @@ html.lenis, html.lenis body { height: auto; }
   color: var(--foreground-2);
 }
 
+/* Light palette — flip every token so descendants invert without code changes.
+   Apply to a wrapping <section> via class="palette-light" to get a Framer-style
+   black → white → black rhythm down the page. */
+.palette-light {
+  --background: #f4f4f5;
+  --foreground: #07080a;
+  --foreground-2: #3f3f46;
+  --foreground-3: #71717a;
+  --foreground-4: #d4d4d8;
+
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e4e4e7;
+  --border: #e4e4e7;
+  --border-2: #d4d4d8;
+
+  /* Darken accents for readable contrast on white */
+  --accent: #4d7c0f;       /* olive — readable on white, still "live" coded */
+  --accent-2: #4338ca;     /* indigo-700 */
+
+  background: var(--background);
+  color: var(--foreground);
+}
+
 /* Subtle background grid for hero */
 .bg-grid {
   background-image:
@@ -135,7 +159,7 @@ html.lenis, html.lenis body { height: auto; }
 ::-webkit-scrollbar-thumb:hover { background: var(--foreground-3); }
 
 /* Selection */
-::selection { background: var(--accent); color: var(--background); }
+::selection { background: var(--accent); color: #07080a; }
 
 /* Focus */
 :focus-visible {

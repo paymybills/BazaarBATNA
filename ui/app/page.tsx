@@ -389,8 +389,8 @@ function StateOfPlayground() {
   const rows = tab === "v2" ? ROWS_V2 : ROWS_V1;
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-24 border-t border-border/60">
-      <div className="grid md:grid-cols-[1fr_2fr] gap-10 md:gap-16">
+    <section className="palette-light border-t border-border/60">
+      <div className="max-w-7xl mx-auto px-6 py-24 grid md:grid-cols-[1fr_2fr] gap-10 md:gap-16">
         <div>
           <div className="text-eyebrow mb-4">State of the playground</div>
           <h2 className="text-h2 max-w-md">Three policies. Three task suites. Receipts on file.</h2>
@@ -528,16 +528,8 @@ function HowItWorks() {
   return (
     <section
       id="how-it-works"
-      className="relative border-t border-border/60 scroll-mt-20 overflow-hidden"
+      className="palette-light relative border-t border-border/60 scroll-mt-20 overflow-hidden"
     >
-      {/* Subtle accent wash to differentiate from neighbouring sections */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--accent) 8%, transparent) 0%, transparent 70%)",
-        }}
-      />
     <div className="relative max-w-7xl mx-auto px-6 py-24">
       <div className="text-eyebrow mb-6">How it works</div>
       <h2 className="text-h1 max-w-3xl mb-10">
@@ -700,7 +692,6 @@ function Architecture() {
     <section
       id="architecture"
       className="relative border-t border-border/60 scroll-mt-20"
-      style={{ background: "var(--surface-2)" }}
     >
     <div className="relative max-w-7xl mx-auto px-6 py-24">
       <div className="text-eyebrow mb-6" style={{ color: "var(--accent-2)" }}>Architecture</div>
@@ -866,15 +857,8 @@ function Training() {
   return (
     <section
       id="training"
-      className="relative border-t border-border/60 scroll-mt-20 overflow-hidden"
+      className="palette-light relative border-t border-border/60 scroll-mt-20 overflow-hidden"
     >
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 50% at 50% 100%, color-mix(in oklab, var(--accent) 6%, transparent) 0%, transparent 60%)",
-        }}
-      />
     <div className="relative max-w-7xl mx-auto px-6 py-24">
       <div className="text-eyebrow mb-6" style={{ color: "var(--accent)" }}>Training pipeline</div>
       <h2 className="text-h1 max-w-3xl mb-4">SFT → GRPO → RLAIF/DPO.</h2>
