@@ -11,6 +11,9 @@ ui/node_modules/
 ui/.next/
 ui/out/
 
+# Local-only safety/spend state (per-host counters, never commit)
+runs/safety_state.json
+
 # Large datasets and local logs
 negotiations_public_release/
 amazon.csv.zip
