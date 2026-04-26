@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiPost } from "../lib/api";
+import { apiPost, apiGet } from "../lib/api";
 import { Send, Loader2, Keyboard, RefreshCw, Brain } from "lucide-react";
 
 /* ── Highlight types ───────────────────────────────────── */
@@ -344,7 +344,22 @@ export default function SellPage() {
   const [loading, setLoading] = useState(false);
   const [thinkingStage, setThinkingStage] = useState<0 | 1 | 2 | 3 | -1>(-1);
   const [currentTells, setCurrentTells] = useState<TellSignal[]>([]);
+  const [agentHealth, setAgentHealth] = useState<"checking" | "live" | "degraded">("checking");
   const logRef = useRef<HTMLDivElement>(null);
+
+  // Probe Sauda inference endpoint on mount
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<{ status: string; live_agent_available: boolean }>("/sauda/health")
+      .then((r) => {
+        if (cancelled) return;
+        setAgentHealth(r.live_agent_available ? "live" : "degraded");
+      })
+      .catch(() => {
+        if (!cancelled) setAgentHealth("degraded");
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // Load curated listings once
   useEffect(() => {
@@ -611,7 +626,41 @@ export default function SellPage() {
     <div className="max-w-6xl mx-auto px-6 py-12">
       {/* Header */}
       <div className="mb-10">
-        <h1 className="text-h1 mb-2">Play</h1>
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <h1 className="text-h1">Play</h1>
+          <div
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-mono tracking-wide ${
+              agentHealth === "live"
+                ? "border-good/40 bg-good/10 text-good"
+                : agentHealth === "degraded"
+                ? "border-warn/40 bg-warn/10 text-warn"
+                : "border-border bg-surface-2/40 text-fg3"
+            }`}
+            title={
+              agentHealth === "live"
+                ? "Live HF Inference Endpoint serving Sauda v2 (Llama-3.1-8B + QLoRA, SFT+GRPO)"
+                : agentHealth === "degraded"
+                ? "HF endpoint unreachable — heuristic fallback active"
+                : "Probing inference endpoint…"
+            }
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                agentHealth === "live"
+                  ? "bg-good shadow-[0_0_6px_var(--good)] animate-pulse"
+                  : agentHealth === "degraded"
+                  ? "bg-warn"
+                  : "bg-fg3"
+              }`}
+              aria-hidden
+            />
+            {agentHealth === "live"
+              ? "HF endpoint connected · Sauda v2 live"
+              : agentHealth === "degraded"
+              ? "HF endpoint offline · heuristic fallback"
+              : "Connecting to Sauda…"}
+          </div>
+        </div>
         <p className="text-meta">
           You&apos;re the seller. Sauda is the buyer. Mirrors the Chicago HAI Kellogg setup.
         </p>
