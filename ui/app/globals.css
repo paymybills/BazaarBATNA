@@ -119,9 +119,9 @@ html.lenis, html.lenis body { height: auto; }
   --foreground-3: #71717a;
   --foreground-4: #d4d4d8;
 
-  --surface: #ffffff;
-  --surface-2: #e4e4e7;
-  --surface-3: #d4d4d8;
+  --surface: #ffffff;            /* outer card containers */
+  --surface-2: #f4f4f5;          /* nested cards (SVG rects) */
+  --surface-3: #e4e4e7;
   --border: #d4d4d8;
   --border-2: #a1a1aa;
 
