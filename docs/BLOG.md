@@ -300,111 +300,81 @@ Two DPO jobs are running in parallel — the smoke I fired this morning on `a100
 
 *(I will come back to this section when the day is done. There will be more rows in the "what exists" list. There will probably also be more bugs. The blog will grow downward, like a lazy plant. Bookmark this paragraph if you want to know when I'm back.)*
 
-## SAUDA V2 BEAT THE BASE MODEL AND I AM YELLING ABOUT IT
-
-I want to take one paragraph and just YELL.
-
-**Sauda v2 — 8B, our fine-tune — beat Llama-3.1-8B base by 7.4% mean surplus. On the same seller. Same seeds. Same tasks. n=30 each.**
-
-That's not a "trends in the right direction" win. That's "the table at the top of the README is not photoshopped." Llama-3.1-8B base scored 0.678 mean surplus across single_deal / asymmetric / amazon. Sauda v2 scored 0.728. **0.728 > 0.678.** That's the whole hackathon. Everything else — the bash typos, the Korean tokens, the goldfish theater, all of it — is the cost of writing a number on the left side of an inequality that came out true.
-
-GRPO held reward at **0.97** across 30 optimization steps. Mean over the run: 0.94. Entropy fell from 0.51 to 0.42 — the policy actually concentrated, it didn't just bounce. The trainer state is on HF, you can pull it yourself, the receipts are durable.
-
-And then the seller-quality eval came back **5 of 6 acceptance criteria pass**, and the amazon task — the one that's basically impossible because the seller is hardcoded to refuse below MSRP — went from 0.258 (3B base) to 0.521 (us). We **doubled** it.
-
-OK. Yelling over. Back to bugs.
-
-## the four-hour rollout that bash ate (and the lesson that paid for the next run)
+## the day two scoreboard
 
 *(We are now in the final two-hour stretch. I am writing this paragraph between refreshes of two HF Jobs dashboards, which is a thing I have started doing without irony.)*
 
-The DPO pipeline produced its first real run last night. Four hours on a10g-largex2. Thirty pairs targeted, twenty-three accepted by the judge. The rollout loop finished. The training script never ran.
+Day two opened with a number I had been chasing for a week. Sauda v2 — 8B, our fine-tune — beat Llama-3.1-8B base by **7.4% mean surplus** across the scaling ladder. Same seller, same seeds, same tasks, n=30 each. 0.678 → 0.728. The amazon task, the brutal one where the seller refuses below MSRP, more than doubled from the 3B base (0.258) to us (0.521). I screenshotted the table and stared at it for a minute. Numbers were on the correct side of the inequality. The training had taken.
+
+Forty minutes later the same day, I lost four hours of DPO rollouts to a four-character bash typo. The script that uploads the pairs file reads `${BUYER_MODEL}` in a commit message. There is no `BUYER_MODEL`. There is `BUYER_BASE`. With `set -eu`, the unbound expansion killed the script *immediately after* the rollout finished and *before* the pairs file uploaded. Four hours of rollouts existed only inside the container's ephemeral disk. The container shut down. The pairs went with it.
 
 ```
 + PAIRS_COMMIT_MSG=pairs built from  vs google/gemma-4-E4B, n=30
 $BUYER_MODEL: unbound variable
 ```
 
-The bash script reads `${BUYER_MODEL}`. There is no `BUYER_MODEL`. There is `BUYER_BASE` and `BUYER_ADAPTER`. With `set -eu`, the unbound expansion killed the script *immediately after* the rollout finished and *before* the pairs file uploaded. Four hours of rollouts existed only inside the container's ephemeral disk. The container shut down. The pairs went with it. **I screamed into a coffee mug.** Then I fixed it.
+The fix took eight minutes once I figured out it was supposed to be nothing. Then I rewrote the rollout loop to flush the JSONL and `HfApi.upload_file` after *every accepted pair*, wrapped in try/except so a future failure can't cascade. The next time a job dies, the pairs survive.
 
 > **Lesson from the trenches #7**: Upload incrementally. The pairs file should hit HF after every accepted pair, not after the loop terminates. If the script crashes, the pairs survive.
 
-And **the rewrite worked the first time it shipped**. The smoke job I fired this morning crashed at a different line (a TRL API change — `max_prompt_length` got removed from `DPOConfig` between versions, classic). But the pairs from that smoke? **Already on HF**, durable, mirrored to the dataset repo every time a pair was accepted. The next rerun reads them with `SKIP_PAIR_BUILD=1` and goes straight to training. No re-rollout. No re-cost.
+## the rewrite that paid for itself a day later
 
-That. Is. The win. The setback paid for itself the next day.
+Smoke job this morning, 6am, fired to validate the per-pair upload. It crashed. But — and this is the part I want to underline — it crashed at *a different line*. TRL changed `DPOConfig` between versions and `max_prompt_length` no longer exists. I found that out by error message instead of by losing more rollouts, because the pairs from that smoke are already on HF, mirrored every time a pair was accepted, sitting in `ankur-1232/dpo-pairs-smoke` waiting for a rerun. The setback from yesterday paid for the recovery today. The next rerun is `SKIP_PAIR_BUILD=1` and one minute of compute away.
 
-> **Lesson from the trenches #8**: Hardware availability is a function of brand recognition. Everyone fights for `a100`. Almost nobody picks `l40sx1`. The L40S has 48GB of VRAM, runs 8B in bf16 comfortably, costs roughly half, and the queue is empty because the name doesn't match anyone's mental model of "the GPU you train on." Pick the unfashionable card. I picked `l40sx1` and was RUNNING in 30 seconds while the a100-large was still in SCHEDULING twenty minutes later. **Money saved. Time saved. Same VRAM. Smug face.**
+Then I tried to fire the real DPO on the most overkill maxxed-out GPU I could find. Typed `h100`. Got `Error: Invalid value for '--flavor': 'h100' is not one of …`. Typed `a100-large`. Job sat in SCHEDULING for twenty minutes. While it waited, I fired a parallel job on `l40sx1` — 48GB VRAM, runs 8B comfortably, half the price of an a100, and the queue was empty because nobody fights for the L40S. **It started RUNNING in 30 seconds.** The a100-large finally moved to RUNNING right as the l40sx1 was already five minutes in. As I type this, the l40sx1 is on attempt 4 of 6 rollouts. The pairs are uploading every time the judge accepts one.
 
-## the bug i caught by playing my own demo (and how that's a feature)
+> **Lesson from the trenches #8**: Hardware availability is a function of brand recognition. Pick the unfashionable card. The L40S has the same VRAM as you need and none of the queue.
 
-*(While the DPO jobs run, I am playing the live `/sell` page myself, which is the surest way to find bugs in it. Spoiler: I found three. I fixed three. The demo is now sharper. **This is the loop working.**)*
+## the bug I caught by playing my own demo
 
-I sent Sauda an offer of 175 for an item it had counter-offered at 140 on. I added "im sorry 170 and im making a loss, theres 3 other offers that ive got" — pressure plus a deception bluff plus a sympathy push, the trifecta. Sauda replied with **139**.
+*(While the DPO jobs run, I am playing the live `/sell` page myself. This is what catches the bugs the eval suite doesn't.)*
 
-A buyer that *decreases* its own offer mid-negotiation is incoherent. I had a monotonicity guard for exactly this. The guard was running. The buyer still went 140 → 139. **OK, fascinating, what did I do.**
+I sent Sauda an offer of 175 on an item it had counter-offered at 140 on. I added "im sorry 170 and im making a loss, theres 3 other offers that ive got" — pressure plus a deception bluff plus a sympathy push, the trifecta. Sauda replied with **139**.
 
-The bug was on the line *after* the bump:
+A buyer that *decreases* its own offer mid-negotiation is incoherent. I had a monotonicity guard for exactly this. The guard was running. The buyer still went 140 → 139. The bug was on the line *after* the bump:
 
 ```python
 steered_price = min(ceiling_offer, own_last_offer + bump)
 ```
 
-`ceiling_offer` is the buyer's max acceptable price. When the seller raises ask, `ceiling_offer` can fall below `own_last_offer` from a previous round. The `min()` then drags us *back* to `ceiling_offer`. I had written a guard that protected against the model retreating but not against the *ceiling* retreating, which turns out to be the same thing in different clothing.
-
-The fix is one line:
+`ceiling_offer` can fall below `own_last_offer` when the seller raises ask. The `min()` drags us *back* to `ceiling_offer`. I had protected the model from retreating but not the ceiling from retreating, which turns out to be the same thing in different clothing. One-line fix:
 
 ```python
 target = max(own_last_offer, min(ceiling_offer, own_last_offer + bump))
 ```
 
-Reload the dev server. Send the same line. **Sauda holds at 140.** A bug that would have made it look incoherent in front of a judge — caught and squashed by playing my own page in a browser tab. Twelve minutes from "huh that's weird" to "fixed and pushed."
+Reload, replay the same line, Sauda holds at 140. Twelve minutes from "huh" to "fixed and pushed." This is the bug the judges would have seen on the live demo. They will not see it now.
 
-> **Lesson from the trenches #9**: When you write a guard, the invariant is the floor of the new value, not the input to a clamp. `max(invariant, …)` is the shape. The day ceiling < floor — and there is always such a day — the order matters and the guard fails silently.
+> **Lesson from the trenches #9**: When you write a guard, the invariant is the floor of the new value, not the input to a clamp. `max(invariant, …)` is the shape. The day ceiling < floor — and there is always such a day — order matters and the guard fails silently.
 
-## the patterns that didn't pattern (until they did)
-
-Same negotiation, second bug. The "What Sauda reads" panel lit up with **zeros** even though I had just typed "3 other offers that ive got" — a textbook deception cue. The pattern file had ten regexes for deception, including the gold-standard CaSiNo cue `\bteen\s+aur\s+log\b` ("three other people"). What it didn't have: the same thing in English with digits. Or "making a loss." Patterns covered the Hinglish corpus I hand-curated and missed the English I would obviously type when playing my own demo.
-
-Three new regexes for English numeric deception (`\b(\d+|two|three|...)\s+(other\s+|more\s+)?(offers?|buyers?|...)\b`), three for sympathy-urgency (`\b(im|i am)\s+making\s+a\s+los(s|ing)\b`). curl'd `/highlight` against my exact deception sentence:
+Same negotiation, second bug, found in the same minute. The "What Sauda reads" panel lit up with zeros even though I had just typed "3 other offers that ive got" — a textbook deception cue. The pattern file had ten regexes for deception, including the gold-standard CaSiNo cue `\bteen\s+aur\s+log\b`. What it didn't have: the same thing in English with digits. Or "making a loss." The corpus I'd hand-curated was Hinglish; the demo I was playing was English. Three new regexes for English numeric deception, three for sympathy-urgency, curl `/highlight` against my exact sentence:
 
 ```json
-{
-  "spans": [
+{ "spans": [
     { "text": "im making a loss", "signal": "urgency",   "score": 0.55 },
-    { "text": "3 other offers",    "signal": "deception", "score": 0.75 }
-  ]
-}
+    { "text": "3 other offers",   "signal": "deception", "score": 0.75 }
+] }
 ```
 
-**0.75 deception. 0.55 urgency.** Bars light up red and orange. Demo gets meaningfully more impressive in the time it took to write three regexes.
+Bars light up red and orange. The demo got meaningfully more impressive in the time it took to write three regexes — and again, this is a bug the judges would have hit and now will not.
 
-> **Lesson from the trenches #10**: Patterns mined from a dataset cover the dataset's distribution, not the user's. Test against your own typing. Especially if your dataset is in one language and your demo runs in another.
+> **Lesson from the trenches #10**: Patterns mined from a dataset cover the dataset's distribution, not the user's. Test against your own typing. Especially if the dataset is one language and the demo runs in another.
 
-## the bonus that didn't math (or: I copied Kellogg, but Kellogg was selling houses)
+## the bonus that didn't math
 
-The `/sell` page told the human seller "you earn $1 per $1k above your reservation, capped at $10." Direct port from the Chicago HAI / Kellogg study brief.
+The `/sell` page told the human seller "you earn $1 per $1k above your reservation, capped at $10." Direct port from the Chicago HAI / Kellogg study brief. Kellogg's study used houses. Mine uses Craigslist hat racks. A $399 listing with a $311 reservation has an $88 gap. You cannot earn $1-per-$1k of $88. The bonus structure was mathematically unreachable on every listing in the catalog and I had not noticed in a week of testing because I was always running the buyer side and never reading the seller brief.
 
-Kellogg's study used **houses**. Mine uses **Craigslist hat racks**. A $399 listing with a $311 reservation has an $88 gap. You cannot earn $1-per-$1k of $88. The bonus structure was mathematically unreachable on every listing in the catalog. I shipped this to no one because I caught it before the judges did. **Saved.**
+Caught it before any judge did. Three lines of TypeScript later: $1 per $10 above reservation, capped at 10% of (ask − reservation). Same hat rack now has a $9 max bonus, hit at the asking price, linear payouts in between. The spirit of Kellogg with the scale of Craigslist. The seller brief now reads like a real game with real stakes.
 
-Rewrote it: $1 per $10 above reservation, capped at 10% of (ask − reservation). Same hat rack now has a $9 max bonus, hit at the asking price, linear payouts in between. **The spirit of Kellogg. The scale of Craigslist.** Three lines of TypeScript. The seller brief now reads like a real game.
+> **Lesson from the trenches #11**: When you port an experimental setup across domains, port the *structure* and re-derive the *parameters*. Kellogg's $1-per-$1k was tuned for $200k transactions. Yours is $200.
 
-> **Lesson from the trenches #11**: When you copy an experimental setup, copy the *structure* and re-derive the *parameters*. The Kellogg study's $1-per-$1k was tuned for $200k transactions. Yours is $200.
+## what's actually on HF, and what isn't yet
 
-## what is actually shipping (FUCK YEAH list)
+Stepping back. The wins are the durable ones, the kind a judge can verify by clicking a link, not the kind I have to talk them into believing.
 
-OK. Pulling up. Inventory check:
+The OpenEnv environment is a running Docker Space at `PayMyBills/BazaarBATNA`. `/reset`, `/step`, `/state`, `/score`, `/tasks`, `/health` all respond. The Sauda v2 adapter is at `PayMyBills/bestdealbot-v2`, including a `last-checkpoint/trainer_state.json` with the full 30-step GRPO log_history — loss, reward, entropy, grad_norm, every step. Anyone can `curl` it. The scaling-ladder eval with the 7.4% win is in `PayMyBills/scaling-eval-runs` with full transcripts. The seller-quality eval — 5 of 6 acceptance criteria pass — is in `PayMyBills/seller-quality-runs`. The tells ablation is reported honestly as a negative result and kept in the codebase as substrate for future in-loop training. Two training notebooks live at `training/train_colab.ipynb` (SFT+GRPO) and `training/dpo_colab.ipynb` (DPO/RLAIF).
 
-- ✅ **Sauda v2 beats Llama-3.1-8B base** by 7.4% mean surplus on a clean controlled scaling ladder. **Receipts on HF.**
-- ✅ **GRPO trainer state on HF**, 30-step log_history with loss/reward/entropy. **Anyone can curl it.**
-- ✅ **OpenEnv-compliant FastAPI environment** running as a HF Space at `PayMyBills/BazaarBATNA`. `/reset`, `/step`, `/state`, `/score`, `/tasks`, `/health`. **Discoverable. Runnable.**
-- ✅ **Per-pair DPO checkpoint upload logic** — shipped, tested, validated by the smoke job that crashed at a different line *with the pairs already on HF*. **The bug paid for itself.**
-- ✅ **Live `/sell` page** with HF Inference Endpoint primary + Ollama fallback. Hinglish replies. Tells panel that updates in real time. **Playable.**
-- ✅ **Seller-quality eval** — 5 of 6 acceptance criteria pass.
-- ✅ **Tells ablation** — net negative, reported honestly. **A negative result we kept.**
-- ✅ **The blog you are reading**, written in real time, including the bugs we are still fixing as I type this paragraph.
-- ⏳ **DPO v3 adapter** — the `l40sx1` job is still in rollouts as I type. The pairs are uploading per-pair to `ankur-1232/dpo-pairs`. Whatever happens at the trainer step, the rollout work is durable. **The next rerun is `SKIP_PAIR_BUILD=1` and one minute of compute away.**
-
-That's the list. We did the things.
+The DPO v3 adapter does not exist yet. The `l40sx1` job will produce it when its rollouts finish and we rerun the trainer with the patched `dpo.py` and `SKIP_PAIR_BUILD=1`. The pairs are durable. The compute is one minute. The path from here to a v3 adapter is short and the script is debugged. We will or will not get there before the deadline. Either way, the v2 result is the headline and the v2 result is locked in.
 
 ## the running lessons list
 
