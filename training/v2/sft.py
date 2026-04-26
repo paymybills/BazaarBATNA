@@ -59,29 +59,56 @@ def _rule_based_buyer(obs: dict) -> dict:
 
 
 def build_sft_rows(tokenizer, n: int) -> list[dict]:
-    """Generate (prompt, action) pairs from rule-based buyer rollouts."""
+    """Generate (prompt, action) pairs from rule-based buyer rollouts.
+
+    With ENABLE_TELLS=1, builds multi-turn rollouts so the SFT prompts
+    actually contain seller-tell observations (which only appear after
+    round 0, populated by the seller's response). Each rollout produces
+    up to `max_rounds` (prompt, action) pairs, each pair being one
+    buyer turn with the obs the buyer saw at that turn.
+
+    Without ENABLE_TELLS the original single-turn-from-reset() behavior
+    is preserved — tells block won't render because obs.tells is None
+    at reset.
+    """
     rng = random.Random(SEED)
     tasks = ["amazon_realistic", "single_deal", "career_10"]
-    rows = []
-    for _ in range(n):
+    enable_tells = os.environ.get("ENABLE_TELLS_IN_LOOP", "0") == "1"
+    rows: list[dict] = []
+    target_rows = n
+    while len(rows) < target_rows:
         task = rng.choice(tasks)
         seed = rng.randint(0, 1_000_000)
         env = BazaarGymEnv(task_name=task, seed=seed)
         obs, _ = env.reset()
-        action = _rule_based_buyer(obs)
-        # Include message field per conversation realism upgrade
-        action["message"] = ""
+        for _turn in range(8):  # max episode length
+            action = _rule_based_buyer(obs)
+            action["message"] = ""
 
-        chat = tokenizer.apply_chat_template(
-            [
-                {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
-                {"role": "user", "content": format_observation(obs)},
-                {"role": "assistant", "content": json.dumps(action)},
-            ],
-            tokenize=False,
-        )
-        rows.append({"text": chat})
-    return rows
+            chat = tokenizer.apply_chat_template(
+                [
+                    {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+                    {"role": "user", "content": format_observation(obs)},
+                    {"role": "assistant", "content": json.dumps(action)},
+                ],
+                tokenize=False,
+            )
+            rows.append({"text": chat})
+
+            if not enable_tells:
+                break  # original single-turn-per-rollout behavior
+
+            if len(rows) >= target_rows:
+                break
+
+            # Step the env so the next turn's obs carries seller-tell signals
+            try:
+                obs, _, done, _ = env.step(action)
+            except Exception:
+                break
+            if done:
+                break
+    return rows[:target_rows]
 
 
 def main():

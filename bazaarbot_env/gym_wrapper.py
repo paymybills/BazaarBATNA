@@ -101,6 +101,29 @@ def format_observation(
             "(seller doesn't know this!)\n"
         )
 
+    # Tells block — only rendered when the observation actually carries
+    # a tells dict. This is the in-loop training signal we want to teach
+    # the buyer to use during SFT/GRPO. At eval time the same block
+    # appears whenever enable_tells/enable_nlp is on, so the buyer sees
+    # the same prompt distribution at train and eval.
+    tells_block = ""
+    tells = obs.get("tells")
+    if tells:
+        urgency = float(tells.get("verbal_urgency", 0.0))
+        deception = float(tells.get("verbal_deception_cue", 0.0))
+        confidence = float(tells.get("verbal_confidence", 0.5))
+        concession = str(tells.get("concession_pattern", "steady"))
+        emotional = float(tells.get("emotional_escalation", 0.0))
+        repeat = int(tells.get("repeat_phrases", 0))
+        condition = str(tells.get("condition_label", "unknown"))
+        tells_block = textwrap.dedent(f"""\
+            --- Seller Tells (noisy signals — read with skepticism) ---
+            urgency: {urgency:.2f}      deception_cue: {deception:.2f}      confidence: {confidence:.2f}
+            concession_pattern: {concession}      emotional_escalation: {emotional:.2f}      repeat_phrases: {repeat}
+            condition: {condition}
+
+            """)
+
     return textwrap.dedent(f"""\
         --- Negotiation State ---
         Item: {obs.get('item_name', 'item')}
@@ -115,6 +138,7 @@ def format_observation(
         Episode: {obs.get('episode_number', 1)} / {obs.get('total_episodes', 1)}
 
         {career_info}\
+        {tells_block}\
         --- Recent History ---
         {history_block}
 

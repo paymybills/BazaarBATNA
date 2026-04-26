@@ -129,12 +129,29 @@ def main():
         print(f"Building GRPO prompt set ({N_PROMPTS} prompts) ...")
         rng = random.Random(SEED)
         train_tasks = ["amazon_realistic", "amazon_realistic", "single_deal"]
+        # ENABLE_TELLS_IN_LOOP=1: half the prompts come from mid-rollout (tells
+        # populated), half from reset (tells absent). This balances the two
+        # distributions the trained model will see at eval time.
+        enable_tells = os.environ.get("ENABLE_TELLS_IN_LOOP", "0") == "1"
         rows = []
-        for _ in range(N_PROMPTS):
+        for i in range(N_PROMPTS):
             task = rng.choice(train_tasks)
             seed = rng.randint(0, 1_000_000)
             env = BazaarGymEnv(task_name=task, seed=seed)
             obs, _ = env.reset()
+            if enable_tells and (i % 2 == 0):
+                # Step once with a placeholder buyer offer so the seller
+                # responds and the next obs carries seller-tell signals.
+                ask = float(obs.get("seller_asking_price") or 60)
+                placeholder = {"action": "offer", "price": round(ask * 0.45, 2), "message": ""}
+                try:
+                    obs, _, done, _ = env.step(placeholder)
+                    if done:
+                        env = BazaarGymEnv(task_name=task, seed=seed)
+                        obs, _ = env.reset()
+                except Exception:
+                    env = BazaarGymEnv(task_name=task, seed=seed)
+                    obs, _ = env.reset()
             chat = tokenizer.apply_chat_template(
                 [
                     {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
