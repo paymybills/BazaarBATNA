@@ -13,30 +13,32 @@ import { TellsDisplay } from "../components/TellsDisplay";
 import { ReplayControls } from "../components/ReplayControls";
 import { Play, RotateCw } from "lucide-react";
 
+// Real best episodes pulled from PayMyBills/scaling-eval-runs (Sauda v2,
+// tells_off, n=90 episodes across three tasks).
 const highlights = [
   {
     id: "amazon-best",
     title: "Amazon best haggle",
-    sub: "₹7,299 → ₹2,645",
-    surplus: 0.974,
+    sub: "₹1,990 Sennheiser CX 80S → ₹1,095",
+    surplus: 0.945,
     rounds: 8,
-    badge: "97% surplus",
+    badge: "94% surplus",
   },
   {
-    id: "tells-deceptive",
-    title: "Read-the-tells win",
-    sub: "Deception flagged in turn 1",
-    surplus: 0.483,
-    rounds: 2,
-    badge: "tell extracted",
-  },
-  {
-    id: "career-grind",
-    title: "Career-mode grind",
-    sub: "8 rounds, sustained pressure",
+    id: "single-deal-best",
+    title: "Single-deal grind",
+    sub: "₹60 silk scarf → ₹32 over 8 rounds",
     surplus: 0.979,
     rounds: 8,
-    badge: "long haggle",
+    badge: "98% surplus",
+  },
+  {
+    id: "pressure-best",
+    title: "Asymmetric-pressure win",
+    sub: "Buyer rode pressure to ₹32",
+    surplus: 0.979,
+    rounds: 8,
+    badge: "98% surplus",
   },
 ];
 

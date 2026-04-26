@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { ArrowRight } from "lucide-react";
 
@@ -267,11 +267,32 @@ type Row = {
   highlight?: boolean;
 };
 
-const ROWS: Row[] = [
+// Sauda v2 — fresh scaling-ladder eval against the hardened seller
+// (Gemma-4-E4B, post-`ef753a6`). 90 episodes per policy across
+// single_deal / asymmetric_pressure / amazon_realistic. n=30 per task.
+// Source: PayMyBills/scaling-eval-runs on HF.
+const ROWS_V2: Row[] = [
+  { policy: "llama-3.2-3b base", share: 0.570, win: 0.67, loss: 0.00, rounds: 2.2 },
+  { policy: "llama-3.1-8b base", share: 0.686, win: 0.73, loss: 0.01, rounds: 3.1 },
+  {
+    policy: "sauda v2 (8b sft+grpo)",
+    share: 0.799,
+    win: 0.64,
+    loss: 0.09,
+    rounds: 6.0,
+    highlight: true,
+  },
+];
+
+// Sauda v1 — earlier eval against the leaky-seller (pre-`ef753a6`).
+// Kept for transparency. Numbers look better because the seller didn't
+// enforce its own reservation. 60 episodes per policy across
+// amazon_realistic / read_the_tells / career_10. n=20 per task.
+const ROWS_V1: Row[] = [
   { policy: "rule_based", share: 0.621, win: 0.37, loss: 0.33, rounds: 3.2 },
   { policy: "baseline:llama3.2:3b", share: 0.471, win: 0.33, loss: 0.12, rounds: 2.0 },
   {
-    policy: "ollama:bestdealbot",
+    policy: "ollama:bestdealbot (v1)",
     share: 0.767,
     win: 0.67,
     loss: 0.0,
@@ -280,19 +301,87 @@ const ROWS: Row[] = [
   },
 ];
 
+type TabId = "v2" | "v1";
+
+const TABS: { id: TabId; label: string; eyebrow: string; sub: string }[] = [
+  {
+    id: "v2",
+    label: "Sauda v2",
+    eyebrow: "current build",
+    sub: "Llama-3.1-8B QLoRA · SFT + GRPO · 90 ep × 3 tasks · hardened seller",
+  },
+  {
+    id: "v1",
+    label: "Sauda v1",
+    eyebrow: "earlier build",
+    sub: "Llama-3.2-3B QLoRA · 60 ep × 3 tasks · leaky seller (pre-fix)",
+  },
+];
+
+function ReceiptsTable({ rows }: { rows: Row[] }) {
+  return (
+    <table className="w-full text-sm font-mono">
+      <thead className="bg-surface-2/50">
+        <tr>
+          <th className="text-left px-5 py-3 text-fg3 font-normal">policy</th>
+          <th className="text-right px-5 py-3 text-fg3 font-normal">buyer_share</th>
+          <th className="text-right px-5 py-3 text-fg3 font-normal">win_rate</th>
+          <th className="text-right px-5 py-3 text-fg3 font-normal">mutual_loss</th>
+          <th className="text-right px-5 py-3 text-fg3 font-normal">rounds</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr
+            key={r.policy}
+            className={`border-t border-border/60 ${r.highlight ? "bg-accent/5" : ""}`}
+          >
+            <td
+              className={`px-5 py-3.5 ${r.highlight ? "text-foreground font-semibold" : "text-fg2"}`}
+            >
+              {r.policy}
+            </td>
+            <td
+              className={`text-right px-5 py-3.5 tabular-nums ${r.highlight ? "text-accent" : "text-foreground"}`}
+            >
+              {r.share.toFixed(3)}
+            </td>
+            <td className="text-right px-5 py-3.5 tabular-nums text-foreground">
+              {(r.win * 100).toFixed(0)}%
+            </td>
+            <td
+              className={`text-right px-5 py-3.5 tabular-nums ${
+                r.loss === 0 ? "text-good" : r.loss > 0.2 ? "text-bad" : "text-foreground"
+              }`}
+            >
+              {(r.loss * 100).toFixed(0)}%
+            </td>
+            <td className="text-right px-5 py-3.5 tabular-nums text-fg2">
+              {r.rounds.toFixed(1)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function StateOfPlayground() {
+  const [tab, setTab] = useState<TabId>("v2");
+  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
+  const rows = tab === "v2" ? ROWS_V2 : ROWS_V1;
+
   return (
     <section className="max-w-7xl mx-auto px-6 py-24 border-t border-border/60">
       <div className="grid md:grid-cols-[1fr_2fr] gap-10 md:gap-16">
         <div>
           <div className="text-eyebrow mb-4">State of the playground</div>
-          <h2 className="text-h2 max-w-md">
-            Three policies, three task suites, sixty episodes each.
-          </h2>
+          <h2 className="text-h2 max-w-md">Three policies. Three task suites. Receipts on file.</h2>
           <p className="text-fg2 mt-5 text-sm leading-relaxed max-w-md">
             Buyer-share is the fraction of bargaining surplus the agent
-            captured. Mutual-loss rate is how often it walked away from a
-            winnable deal. Lower is better; bestdealbot sits at zero.
+            captured. Mutual-loss is how often it walked away from a
+            winnable deal. Sauda v2 captures the most surplus per close;
+            it&apos;s also the only buyer that walks when the deal is bad.
           </p>
           <Link
             href="/replay"
@@ -303,69 +392,67 @@ function StateOfPlayground() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface overflow-hidden">
-          <table className="w-full text-sm font-mono">
-            <thead className="bg-surface-2/50">
-              <tr>
-                <th className="text-left px-5 py-3 text-fg3 font-normal">
-                  policy
-                </th>
-                <th className="text-right px-5 py-3 text-fg3 font-normal">
-                  buyer_share
-                </th>
-                <th className="text-right px-5 py-3 text-fg3 font-normal">
-                  win_rate
-                </th>
-                <th className="text-right px-5 py-3 text-fg3 font-normal">
-                  mutual_loss
-                </th>
-                <th className="text-right px-5 py-3 text-fg3 font-normal">
-                  rounds
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ROWS.map((r) => (
-                <tr
-                  key={r.policy}
-                  className={`border-t border-border/60 ${
-                    r.highlight ? "bg-accent/5" : ""
+          <div className="flex border-b border-border/60 bg-surface-2/30">
+            {TABS.map((t) => {
+              const isActive = t.id === tab;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`flex-1 px-5 py-3.5 text-left transition-colors border-r border-border/60 last:border-r-0 ${
+                    isActive
+                      ? "bg-surface text-foreground"
+                      : "text-fg3 hover:bg-surface-2/60 hover:text-fg2"
                   }`}
+                  aria-pressed={isActive}
                 >
-                  <td
-                    className={`px-5 py-3.5 ${
-                      r.highlight ? "text-foreground font-semibold" : "text-fg2"
-                    }`}
-                  >
-                    {r.policy}
-                  </td>
-                  <td
-                    className={`text-right px-5 py-3.5 tabular-nums ${
-                      r.highlight ? "text-accent" : "text-foreground"
-                    }`}
-                  >
-                    {r.share.toFixed(3)}
-                  </td>
-                  <td className="text-right px-5 py-3.5 tabular-nums text-foreground">
-                    {(r.win * 100).toFixed(0)}%
-                  </td>
-                  <td
-                    className={`text-right px-5 py-3.5 tabular-nums ${
-                      r.loss === 0
-                        ? "text-good"
-                        : r.loss > 0.2
-                        ? "text-bad"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {(r.loss * 100).toFixed(0)}%
-                  </td>
-                  <td className="text-right px-5 py-3.5 tabular-nums text-fg2">
-                    {r.rounds.toFixed(1)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-eyebrow ${isActive ? "text-accent" : "text-fg3"}`}>
+                      {t.eyebrow}
+                    </span>
+                    <span
+                      className={`text-sm font-mono ${
+                        isActive ? "text-foreground font-semibold" : "text-fg2"
+                      }`}
+                    >
+                      {t.label}
+                    </span>
+                  </div>
+                  <div className="text-meta mt-1 text-xs">{t.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+          <ReceiptsTable rows={rows} />
+          {tab === "v1" ? (
+            <div className="px-5 py-3 border-t border-border/60 bg-surface-2/40 text-meta text-xs leading-relaxed">
+              Caveat: v1 ran against an earlier seller that didn&apos;t auto-accept
+              at reservation. Numbers look great because the seller leaked
+              surplus. After hardening the seller, Sauda v2 is the canonical
+              comparison.{" "}
+              <a
+                href="https://github.com/paymybills/BazaarBATNA/blob/main/docs/BLOG.md"
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent hover:text-foreground underline-offset-4 hover:underline transition-colors"
+              >
+                full story →
+              </a>
+            </div>
+          ) : (
+            <div className="px-5 py-3 border-t border-border/60 bg-surface-2/40 text-meta text-xs leading-relaxed">
+              {active.sub}.{" "}
+              <a
+                href="https://huggingface.co/datasets/PayMyBills/scaling-eval-runs"
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent hover:text-foreground underline-offset-4 hover:underline transition-colors"
+              >
+                raw eval data →
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -429,7 +516,7 @@ function Footer() {
             github
           </a>
           <a
-            href="https://huggingface.co/PayMyBills/bestdealbot"
+            href="https://huggingface.co/PayMyBills/bestdealbot-v2"
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground transition-colors"
