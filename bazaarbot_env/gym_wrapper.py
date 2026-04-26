@@ -396,7 +396,11 @@ def steer_bayesian_action(
     if own_last_offer is not None and steered_price < own_last_offer:
         gap = max(0.0, ask - own_last_offer)
         bump = max(1.0, gap * 0.15)
-        steered_price = min(ceiling_offer, own_last_offer + bump)
+        # Hold at last offer if ceiling has fallen below it; never retreat.
+        # Clamping to min(ceiling, ...) here would let ceiling drag us backward
+        # — the exact bug the guard is meant to prevent.
+        target = max(own_last_offer, min(ceiling_offer, own_last_offer + bump))
+        steered_price = target
     action["price"] = round(steered_price, 2)
     action["action"] = "offer"
     return _finalize(action)

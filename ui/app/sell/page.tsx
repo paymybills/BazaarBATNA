@@ -77,11 +77,13 @@ function makeBrief(listing: Listing): RoleBrief {
     "Rent due in 10 days; this would cover it.",
   ];
   const pressure = pressureOptions[Math.floor(Math.random() * pressureOptions.length)];
+  const gap = Math.max(0, asking - reservation);
+  const max_bonus = Math.max(1, Math.round(gap * 0.10));
   return {
     asking_price: asking,
     reservation_price: reservation,
     bonus_per_unit: 1,
-    max_bonus: 10,
+    max_bonus,
     persona,
     pressure,
   };
@@ -120,7 +122,7 @@ function ListingCard({ listing, brief }: { listing: Listing; brief: RoleBrief })
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Brief label="Asking price" value={`$${brief.asking_price.toLocaleString()}`} />
           <Brief label="Reservation (secret)" value={`$${brief.reservation_price.toLocaleString()}`} accent="warn" />
-          <Brief label="Bonus per $1k above" value={`+$${brief.bonus_per_unit}`} />
+          <Brief label="Bonus per $10 above" value={`+$${brief.bonus_per_unit}`} />
           <Brief label="Max bonus" value={`$${brief.max_bonus}`} />
         </div>
         <div className="mt-5 grid sm:grid-cols-2 gap-4 text-sm">
@@ -135,9 +137,9 @@ function ListingCard({ listing, brief }: { listing: Listing; brief: RoleBrief })
         </div>
         <div className="mt-5 text-fg3 text-xs leading-relaxed border-t border-border pt-4">
           You earn <span className="text-foreground">${brief.bonus_per_unit}</span> bonus per
-          $1k above your reservation price, capped at ${brief.max_bonus}. You earn
+          $10 above your reservation, capped at ${brief.max_bonus}. You earn
           nothing if you sell below ${brief.reservation_price.toLocaleString()} or
-          fail to close. <em>Mirrors the Chicago HAI / Kellogg study setup.</em>
+          fail to close. <em>Adapted from the Chicago HAI / Kellogg study setup.</em>
         </div>
       </div>
     </div>
@@ -391,6 +393,20 @@ export default function SellPage() {
     ];
   };
 
+  // Pre-message tells: shown on round 1 before the seller has typed anything.
+  // The buyer truly has no verbal signal to read yet — only the listing exists.
+  // Verbal/behavioral default to 0 (we'll populate from /highlight after the
+  // seller speaks); condition is derived from the listing text itself so it can
+  // already have a value pre-conversation.
+  const baselineTells = (): TellSignal[] => [
+    { key: "urgency",    label: "Urgency",         value: 0, group: "verbal" },
+    { key: "confidence", label: "Confidence",      value: 0, group: "verbal" },
+    { key: "deception",  label: "Deception cue",   value: 0, group: "verbal" },
+    { key: "speed",      label: "Offer speed",     value: 0, group: "verbal" },
+    { key: "fidget",     label: "Fidget level",    value: 0, group: "behavioral", synthetic: true },
+    { key: "condition",  label: "Condition score", value: 0, group: "condition" },
+  ];
+
   const startNegotiation = useCallback(async () => {
     if (!brief || !currentListing) return;
     setLoading(true);
@@ -421,7 +437,10 @@ export default function SellPage() {
       setDone(false);
       setResult(null);
       setStarted(true);
-      setCurrentTells(generateTells(1, res.buyer_price));
+      // Show all-zero tells on reset: the seller (user) hasn't typed yet,
+      // so there's nothing for the buyer to read. The Fidget bar stays at
+      // 0 too — synthetic signals shouldn't pretend to extract from silence.
+      setCurrentTells(baselineTells());
       setTickerMessages([]);
     } catch (e) {
       // Render the error to the chat so the user can see why the buyer
@@ -511,16 +530,29 @@ export default function SellPage() {
           }
         }
 
-        // Hydrate the tells panel from the real /highlight aggregate when available
+        // Hydrate the tells panel from the real /highlight aggregate when available.
+        // Behavioral fidget is synthetic but should be a deterministic function of
+        // signal — not random jitter. Tie it to (round depth × price-pressure)
+        // so it monotonically reflects how stressed a real seller would look,
+        // and stays 0 when nothing has been said.
         const agg = highlightRes.aggregate || {};
+        const askPrice = brief?.asking_price ?? 0;
+        const pressure = res.buyer_price && askPrice
+          ? Math.max(0, 1 - res.buyer_price / askPrice)
+          : 0;
+        // Only show fidget once the seller has actually typed a message
+        // (not just the auto "Counter at $X" template that fires when the
+        // user submits without text). Synthetic but at least signal-driven.
+        const sellerSpoke = !!(sellerText && sellerText.trim());
+        const fidget = sellerSpoke
+          ? Math.min(1, (res.round / 8) * 0.4 + pressure * 0.4)
+          : 0;
         const realTells: TellSignal[] = [
           { key: "urgency", label: "Urgency", value: agg.urgency ?? 0, group: "verbal" },
           { key: "deception", label: "Deception", value: agg.deception ?? 0, group: "verbal" },
           { key: "confidence", label: "Confidence", value: agg.confidence ?? 0, group: "verbal" },
           { key: "condition", label: "Condition", value: agg.condition ?? 0, group: "condition" },
-          // Behavioral signals stay synthetic — labelled honestly
-          ...generateTells(res.round, res.buyer_price)
-            .filter((t) => t.group === "behavioral"),
+          { key: "fidget", label: "Fidget level", value: fidget, group: "behavioral", synthetic: true },
         ];
         setCurrentTells(realTells);
 
@@ -571,7 +603,7 @@ export default function SellPage() {
   const earnedBonus = brief && result?.agreed_price
     ? Math.min(
         brief.max_bonus,
-        Math.max(0, Math.floor(((result.agreed_price as number) - brief.reservation_price) / 1000) * brief.bonus_per_unit)
+        Math.max(0, Math.floor(((result.agreed_price as number) - brief.reservation_price) / 10) * brief.bonus_per_unit)
       )
     : 0;
 

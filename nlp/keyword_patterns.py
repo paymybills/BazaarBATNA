@@ -54,6 +54,10 @@ PATTERNS: list[Pattern] = [
     _p(r"\btime\s+waste\b", "urgency", 0.5, "Impatience signal"),
     _p(r"\bimmediately\b", "urgency", 0.4, "Demands same-instant action"),
     _p(r"\bsend\s+(?:the\s+)?money\b", "urgency", 0.5, "Pushing toward immediate transaction"),
+    _p(r"\b(?:i'?m|im|i am)\s+(?:making\s+a\s+)?los(?:s|ing)\b", "urgency", 0.55,
+       "Loss-claim sympathy push — pressures buyer to feel bad about price"),
+    _p(r"\bnot?\s+making\s+(?:any\s+)?(?:profit|money)\b", "urgency", 0.5, "No-profit sympathy push"),
+    _p(r"\bbarely\s+breaking\s+even\b", "urgency", 0.5, "Sympathy push: claims zero margin"),
 
     # ── DECEPTION ────────────────────────────────────────────────
     # The classic: "teen aur log dekh rahe" (three other people are looking)
@@ -67,6 +71,14 @@ PATTERNS: list[Pattern] = [
     _p(r"\bdemand\s+(?:zyada|high)\b", "deception", 0.4, "Claims market demand to justify price"),
     _p(r"\bmarket\s+(?:mein\s+)?(?:bahut\s+)?demand\b", "deception", 0.4, "Claims market demand"),
     _p(r"\bbest\s+price\b", "deception", 0.3, "Self-praise — soft anchoring"),
+    # Numeric "3 other offers" / "two more buyers" — same external-incentive bluff
+    # as "teen aur log" but in English with digits or number-words.
+    _p(r"\b(?:\d+|two|three|four|five|several|multiple|many)\s+(?:other\s+|more\s+)?(?:offers?|buyers?|people|interested)\b",
+       "deception", 0.75, "External-incentive bluff: claims competing offers/buyers"),
+    _p(r"\bgot\s+(?:\d+|two|three|four|five|several|multiple|other)\s+(?:offers?|buyers?)\b",
+       "deception", 0.75, "Claims existing competing offers"),
+    _p(r"\b(?:already\s+)?have\s+(?:\d+|two|three|four|other)\s+(?:offers?|buyers?)\b",
+       "deception", 0.75, "Claims existing competing offers"),
 
     # ── CONFIDENCE ───────────────────────────────────────────────
     _p(r"\bmarket\s+rate\b", "confidence", 0.6, "Confidence: anchoring to external price reference"),
