@@ -640,7 +640,7 @@ function SystemDiagram() {
       <text x="74" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">+ LoRA + steering</text>
 
       {/* Env (centre) */}
-      <rect x="180" y="60" width="120" height="120" rx="8" fill="var(--surface)" stroke="var(--fg2)" strokeWidth="1.5" />
+      <rect x="180" y="60" width="120" height="120" rx="8" fill="var(--background)" stroke="var(--fg2)" strokeWidth="1.5" />
       <text x="240" y="83" textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">OPENENV</text>
       <text x="240" y="103" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--foreground)">BazaarBATNA</text>
       <text x="240" y="118" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">FastAPI</text>
@@ -673,7 +673,7 @@ function SystemDiagram() {
       <text x="323" y="156" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">offer + msg</text>
 
       {/* Tasks (below env, dashed) */}
-      <rect x="180" y="210" width="120" height="36" rx="6" fill="var(--surface)" stroke="var(--fg2)" strokeWidth="1" strokeDasharray="4 3" />
+      <rect x="180" y="210" width="120" height="36" rx="6" fill="var(--background)" stroke="var(--fg2)" strokeWidth="1" strokeDasharray="4 3" />
       <text x="240" y="226" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">8 tasks · 3 personas</text>
       <text x="240" y="239" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">amazon listings</text>
       <line x1="240" y1="180" x2="240" y2="210" stroke="var(--fg2)" strokeWidth="1" strokeDasharray="2 2" markerEnd="url(#arrowSys)" />

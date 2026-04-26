@@ -113,17 +113,20 @@ html.lenis, html.lenis body { height: auto; }
    Apply to a wrapping <section> via class="palette-light" to get a Framer-style
    black → white → black rhythm down the page. */
 .palette-light {
-  --background: #f4f4f5;
+  /* Three distinct surface tiers so nested SVG rects don't blend into their
+     outer container: section bg is pure white, outer cards are off-white,
+     inner SVG rects are visibly grey. */
+  --background: #ffffff;          /* section page bg (pure white) */
   --foreground: #07080a;
   --foreground-2: #3f3f46;
   --foreground-3: #71717a;
   --foreground-4: #d4d4d8;
 
-  --surface: #ffffff;            /* outer card containers */
-  --surface-2: #f4f4f5;          /* nested cards (SVG rects) */
-  --surface-3: #e4e4e7;
-  --border: #d4d4d8;
-  --border-2: #a1a1aa;
+  --surface: #f4f4f5;             /* outer card containers (subtle tint on white) */
+  --surface-2: #e4e4e7;           /* nested SVG rects (visibly grey) */
+  --surface-3: #d4d4d8;
+  --border: #a1a1aa;              /* darker so card outlines are visible on white */
+  --border-2: #71717a;
 
   /* Darken accents for readable contrast on white */
   --accent: #4d7c0f;       /* olive — readable on white, still "live" coded */
