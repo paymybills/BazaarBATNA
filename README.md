@@ -38,22 +38,28 @@ Both sides infer through asymmetric information. The buyer never sees the seller
 
 A clean controlled comparison: same seller (Gemma-4-E4B), same seeds, same tasks, three different buyer policies. n=30 episodes per task.
 
-| Buyer | single_deal | asymmetric | amazon | **Mean** | Deal rate | Rounds |
-|---|---:|---:|---:|---:|---:|---:|
-| Llama-3.2-3B base | 0.722 | 0.731 | 0.258 | **0.570** | 1.00 | 2.2 |
-| Llama-3.1-8B base | 0.818 | 0.787 | 0.430 | **0.678** | 0.99 | 3.1 |
-| **Sauda v2** (8B SFT+GRPO) | **0.835** | **0.827** | **0.521** | **0.728** | 0.91 | 6.0 |
-| **Sauda v3** (v2 + DPO/RLAIF, n=10*) | 0.820 | 0.807 | 0.457 | 0.695 | **1.00** | 3.5 |
+| Buyer | Tells | single_deal | asymmetric | amazon | **Mean** | Deal rate | Rounds |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Llama-3.2-3B base | ON | 0.722 | 0.731 | 0.258 | **0.570** | 1.00 | 2.2 |
+| Llama-3.1-8B base | ON | 0.818 | 0.787 | 0.430 | **0.678** | 0.99 | 3.1 |
+| **Sauda v2** (8B SFT+GRPO) | OFF | **0.835** | **0.827** | **0.521** | **0.728** | 0.91 | 6.0 |
+| Sauda v2 (tells injected at inference) | ON | 0.810 | 0.768 | 0.507 | 0.695 | 0.88 | 6.0 |
+| Sauda v2-tells (GRPO-only, tells in loop)† | ON | 0.792 | 0.779 | 0.389 | 0.653 | **1.00** | 3.0 |
+| Sauda v3 (v2 + DPO/RLAIF, n=10)\* | OFF | 0.820 | 0.807 | 0.457 | 0.695 | **1.00** | 3.5 |
 
-\* v3 was trained on **6 Claude-judged preference pairs** in the final hour and evaluated at smaller n=10 due to the time budget. Smoke eval, directional only.
+\* v3 trained on **6 Claude-judged preference pairs** in the final hour, evaluated at n=10. Directional only.
+† v2-tells **skipped the SFT warmup** (GRPO-only with tells in loop). Direct comparison to vanilla v2 is unfair on surplus because v2 had SFT first; included to show tells-in-loop trains stably and produces a strong closer.
 
 **Reading this:**
 - Scaling 3B → 8B base buys you +19% mean surplus.
-- Training on top of 8B (SFT+GRPO) buys you another +7% AND ~2× longer negotiations. Base models capitulate fast (2-3 rounds); Sauda actually plays the game.
+- Training on top of 8B (SFT+GRPO, no tells) buys you another +7% AND ~2× longer negotiations. Base models capitulate fast (2-3 rounds); Sauda actually plays the game.
 - Sauda's deal rate (0.91) is a feature, not a bug — Sauda walks when offers are bad. Base models close any deal regardless of value.
-- **v3 trade-off:** 6 preference pairs nudge the policy toward closing — deal rate 0.91 → 1.00 and rounds 6.0 → 3.5, at slight surplus cost. With more pairs (target was 30) we'd expect surplus to recover or surpass v2 while keeping the closing behavior. **The pipeline works end-to-end** — pairs durable on [`ankur-1232/dpo-pairs`](https://huggingface.co/datasets/ankur-1232/dpo-pairs), adapter at [`ankur-1232/bestdealbot-v3`](https://huggingface.co/ankur-1232/bestdealbot-v3).
+- **Tells-at-inference is net negative** (0.728 → 0.695) — bolting tells onto a model that never trained against them moves prices in directions the buyer can't compensate for. Reported honestly.
+- **Tells-in-loop trains stably** but the GRPO-only v2-tells underperforms vanilla v2 on surplus (0.653 vs 0.728), almost certainly because the SFT warmup was skipped — the buyer learned tell-conditioning from scratch instead of starting from a JSON-fluent base. **This is a missing-control problem, not evidence tells hurt.** A proper ablation (SFT-with-tells → GRPO-with-tells) is the natural next experiment; we ran out of compute window.
+- **v3 (DPO) trade-off:** 6 preference pairs nudge the policy toward closing — deal rate 0.91 → 1.00 and rounds 6.0 → 3.5, at slight surplus cost. With more pairs (target was 30) we'd expect surplus to recover. **The full SFT → GRPO → DPO/RLAIF pipeline works end-to-end** — pairs durable on [`ankur-1232/dpo-pairs`](https://huggingface.co/datasets/ankur-1232/dpo-pairs), adapter at [`ankur-1232/bestdealbot-v3`](https://huggingface.co/ankur-1232/bestdealbot-v3).
+- **Both tells variants and DPO converge on the same closing-bias signature** (deal rate → 1.00, rounds → ~3): independent training perturbations push the buyer toward "close more, walk less." The vanilla v2 walking behavior at 0.91 is what produces the highest surplus.
 
-Datasets: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs) (v2 ladder) · [`ankur-1232/sauda-eval-runs`](https://huggingface.co/datasets/ankur-1232/sauda-eval-runs) (v3 smoke)
+Datasets: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs) (v2 ladder + tells-injected) · [`ankur-1232/sauda-eval-runs`](https://huggingface.co/datasets/ankur-1232/sauda-eval-runs) (v2-tells, v3)
 
 ### Seller quality — 5 of 6 acceptance criteria pass
 
