@@ -46,6 +46,7 @@ N_PER_TASK="${N_PER_TASK:-30}"
 TASKS="${TASKS:-single_deal asymmetric_pressure amazon_realistic}"
 SEED_BASE="${SEED_BASE:-1000}"
 BASE_MODEL="${BASE_MODEL:-unsloth/Meta-Llama-3.1-8B-Instruct}"
+ENABLE_NLP="${ENABLE_NLP:-0}"
 TIMEOUT="${TIMEOUT:-2h}"
 IMAGE="${IMAGE:-python:3.11-slim}"
 
@@ -107,6 +108,7 @@ PYTHONPATH=. python -u eval/eval_harness.py \
     --hf_base "$BASE_MODEL" \
     --hf_adapter "$MODEL_REPO" \
     --hf_steer 1 \
+    --enable_nlp "$ENABLE_NLP" \
     --n "$N_PER_TASK" \
     --tasks $TASKS \
     --seed_base "$SEED_BASE" \
@@ -165,6 +167,7 @@ hf jobs run \
     -e N_PER_TASK="$N_PER_TASK" \
     -e TASKS="$TASKS" \
     -e SEED_BASE="$SEED_BASE" \
+    -e ENABLE_NLP="$ENABLE_NLP" \
     "$IMAGE" \
     bash -c "$JOB_SCRIPT"
 
