@@ -34,20 +34,22 @@ if [ -z "${HF_TOKEN:-}" ]; then
 fi
 
 # Default REPO_ID and SFT_HF_REPO to the active account's namespace.
-# If the caller pre-set USERNAME or any of the *_REPO env-vars, skip the
-# whoami round-trip entirely (it hits HF API rate limits during heavy use).
-if [ -z "${USERNAME:-}" ] && [ -z "${SFT_HF_REPO:-}" ] && [ -z "${REPO_ID:-}" ] && [ -z "${RESULTS_REPO:-}" ]; then
+# Note: don't read USERNAME from env — it shadows the Linux USERNAME var
+# (which holds your shell login name, NOT your HF account). Use HF_USER
+# explicitly if you want to override without setting all *_REPO vars.
+HF_USER="${HF_USER:-}"
+if [ -z "$HF_USER" ] && [ -z "${SFT_HF_REPO:-}" ] && [ -z "${REPO_ID:-}" ] && [ -z "${RESULTS_REPO:-}" ]; then
     if [ -n "${HF_TOKEN:-}" ]; then
-        USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+        HF_USER=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
             https://huggingface.co/api/whoami-v2 2>/dev/null | \
             python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
     fi
-    if [ -z "$USERNAME" ]; then
-        USERNAME=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+    if [ -z "$HF_USER" ]; then
+        HF_USER=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
     fi
-    if [ -z "$USERNAME" ]; then
+    if [ -z "$HF_USER" ]; then
         echo "ERROR: could not resolve HF username." >&2
-        echo "       Set USERNAME=<your-hf-username> or pass *_REPO env-vars explicitly." >&2
+        echo "       Set HF_USER=<your-hf-username> or pass *_REPO env-vars explicitly." >&2
         exit 1
     fi
 fi
@@ -55,9 +57,9 @@ fi
 # So the SFT-tells adapter lives at <user>/bestdealbot-v2-tells-sft, and
 # this GRPO step consumes from there and writes the final SFT+GRPO adapter
 # to <user>/bestdealbot-v2-tells.
-SFT_HF_REPO="${SFT_HF_REPO:-${USERNAME}/bestdealbot-v2-tells-sft}"
-REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
-RESULTS_REPO="${RESULTS_REPO:-${USERNAME}/grpo-tells-runs}"
+SFT_HF_REPO="${SFT_HF_REPO:-${HF_USER}/bestdealbot-v2-tells-sft}"
+REPO_ID="${REPO_ID:-${HF_USER}/bestdealbot-v2-tells}"
+RESULTS_REPO="${RESULTS_REPO:-${HF_USER}/grpo-tells-runs}"
 
 DETACH="-d"
 if [ "${1:-}" = "--foreground" ]; then

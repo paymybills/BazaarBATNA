@@ -49,26 +49,27 @@ if [ -z "${HF_TOKEN:-}" ]; then
 fi
 
 # Default REPO_ID and RESULTS_REPO to the active account's namespace if not set.
-# Skips the whoami round-trip when caller supplies USERNAME or *_REPO directly
-# (the whoami endpoint rate-limits aggressively during heavy use).
+# Note: don't read USERNAME from env — it shadows the Linux USERNAME var
+# (which holds your shell login name, not your HF account). Use HF_USER.
+HF_USER="${HF_USER:-}"
 if [ -z "${REPO_ID:-}" ] || [ -z "${RESULTS_REPO:-}" ]; then
-    if [ -z "${USERNAME:-}" ]; then
+    if [ -z "$HF_USER" ]; then
         if [ -n "${HF_TOKEN:-}" ]; then
-            USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            HF_USER=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
                 https://huggingface.co/api/whoami-v2 2>/dev/null | \
                 python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
         fi
-        if [ -z "$USERNAME" ]; then
-            USERNAME=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+        if [ -z "$HF_USER" ]; then
+            HF_USER=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
         fi
     fi
-    if [ -z "$USERNAME" ]; then
+    if [ -z "$HF_USER" ]; then
         echo "ERROR: could not resolve HF username." >&2
-        echo "       Set USERNAME=<your-hf-username> or pass REPO_ID+RESULTS_REPO explicitly." >&2
+        echo "       Set HF_USER=<your-hf-username> or pass REPO_ID+RESULTS_REPO explicitly." >&2
         exit 1
     fi
-    REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
-    RESULTS_REPO="${RESULTS_REPO:-${USERNAME}/sft-tells-runs}"
+    REPO_ID="${REPO_ID:-${HF_USER}/bestdealbot-v2-tells}"
+    RESULTS_REPO="${RESULTS_REPO:-${HF_USER}/sft-tells-runs}"
 fi
 
 DETACH="-d"
