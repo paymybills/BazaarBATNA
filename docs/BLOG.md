@@ -1,14 +1,16 @@
 # I Spent 24 Hours Teaching An LLM To Haggle In Hinglish And It Tried To Buy A Sofa Eight Times
 
-> A Metathon hackathon journal. If you're looking for the responsible engineering write-up, this is not it. The buyer agent is named **Sauda** and at one point it agreed to a price and then five turns later said "27. done?" like that was a normal thing to do.
+> A live-from-the-venue hackathon journal. If you're looking for the responsible engineering write-up, this is not it. The buyer agent is named **Sauda** and at one point it agreed to a price and then five turns later said "27. done?" like that was a normal thing to do.
+
+> *(Reader: I am writing this between bug fixes. The DPO smoke is on attempt 2 of 30 in another tab. We have not finished. By the time you read this we may have. Or may not have. The blog is being committed in real time alongside the code. Anyway.)*
 
 ## the premise
 
-OpenEnv hackathon. We had to ship a negotiation environment, a buyer that wins it, and a website where humans can play. We had been building this for weeks. We had not been doing it well.
+OpenEnv hackathon. Ship a negotiation environment, a buyer that wins it, and a website where humans can play. We have been building this for weeks. We have not been doing it well.
 
 The buyer needed a name. We had been calling it MolBhav. Halfway through Saturday we renamed it Sauda because MolBhav, when said out loud at a hackathon, sounds like a deli sandwich.
 
-The renaming took three commits across the entire codebase including a CSS class and a thinking-beat animation timer. This is foreshadowing.
+The renaming took three commits across the entire codebase including a CSS class and a thinking-beat animation timer. This is foreshadowing. (Most paragraphs in this blog are foreshadowing. You will get used to it.)
 
 ## the part where I lie to myself about how hard SFT will be
 
@@ -32,6 +34,8 @@ I committed the fix. I committed it again because the first commit was wrong. Th
 
 > **Lesson from the trenches #1**: SFT is the easiest part of the trilogy. The hard part is everything that depends on inference being fast and stable, which is everything else. The model speaks Korean if you breathe wrong on it.
 
+*(I want to clarify something before we keep going. I said "I" up there. The way I am writing this blog, "I" am one person, the engineer, the protagonist, the chump. In reality there are two of us, plus a hackathon's worth of code, plus a model that is at this exact moment generating text I will need to debug in approximately fifteen minutes. The "I" is a narrative simplification. The bugs are real.)*
+
 ## the dependency hell era
 
 I tried to install bitsandbytes on Kaggle. Kaggle said no.
@@ -51,6 +55,8 @@ b710e72 Pin triton==2.3.1 + bnb==0.44.1 (avoids Kaggle libstdc++ ABI mismatch)
 **Seven dependency commits in a row.** Six of them rolled back the previous one. At one point I bumped bitsandbytes from 0.44.1 to 0.45.1 because triton 3.0 removed `triton.ops` and 0.44.1 imported it. Then 0.45.1 hit a different bug because Kaggle's libstdc++ was too old for the symbols 0.45.1 wanted (`GLIBCXX_3.4.32 not found`). Then I rolled back to 0.44.1 and pinned triton to 2.3.1 to avoid the `triton.ops` removal entirely.
 
 I shouted "should I just colab this bitch" into the chat. We switched to Colab.
+
+*(That line is real. It is in our chat history. I am not paraphrasing. If you ever need to know whether someone is having a bad time, listen for the word "bitch" applied to a piece of cloud infrastructure. It is diagnostic.)*
 
 > **Lesson from the trenches #2**: Kaggle is a sandbox. Sandboxes have rules. When the sandbox loses, the sandbox doesn't tell you it lost. It just hangs forever during cell 4 and you wonder if your wifi is broken.
 
@@ -78,6 +84,8 @@ I re-ran the eval. The seller still wasn't accepting. I traced through the LLM c
 Commit `ef753a6: Auto-accept when buyer offer ≥ reservation (LLM doesn't know the floor, would keep countering)`. If the LLM proposes a counter above the buyer's offer, but the buyer's offer is already above reservation, force `action="accept"`.
 
 Three commits to get the seller to accept a deal. *Three.* And this is just the seller. The buyer is whole separate adventure.
+
+*(Side note for the reader: if you are wondering whether I am going to get to the buyer adventure, the answer is "yes but not yet." The seller has to work first. Otherwise the buyer's eval numbers are measured against a seller that doesn't enforce its own rules and the buyer looks like a genius until you fix the seller and then the buyer looks like a person who got lucky. We will get to the moment where this exact thing happens. Stay with me.)*
 
 > **Lesson from the trenches #3**: An LLM that doesn't know its own constraints can't enforce them. If the constraint is "don't reveal X," the LLM has to know X to avoid revealing X. If the constraint is "always accept when buyer's offer is good enough," the LLM has to know what "good enough" means or it will keep negotiating against itself forever.
 
@@ -113,6 +121,8 @@ The lower number is the more honest number. The 0.91 was inflated by a leaky sel
 
 We left both numbers in the README. The full story is more interesting than either number alone. We also added a section called "the amazon_realistic regression" which is just a `git log -p bazaarbot_env/llm_seller.py af7b31d..HEAD` and a paragraph explaining what happened.
 
+*(I told you we'd get to this moment. We are now at this moment. The buyer looked like a genius. The seller had been broken. The seller is fixed. The buyer is still good — just less of a genius. This is fine. This is research. Hello again, dear reader.)*
+
 ## the dpo pipeline that almost worked seven times
 
 This is where it gets stupid.
@@ -120,6 +130,8 @@ This is where it gets stupid.
 The plan was preference pairs. Roll out the buyer twice on the same scenario at different temperatures, have Claude judge which transcript negotiated better, train Sauda v3 on the (chosen, rejected) pairs.
 
 Claude was busy when I needed it most. The fix was a heuristic fallback. The heuristic fallback had been written six weeks ago and never actually tested against real transcripts. Foreshadowing #2.
+
+*(The blog you are reading currently has more foreshadowing than payoff. This is because the payoff hasn't happened yet — the DPO smoke is still running. If you have come back to this blog later and the ending has changed, that is why. The story is being lived.)*
 
 ### Smoke v1: the silence
 
@@ -175,6 +187,8 @@ Commit `b3e7dca: Fix critical generation hang: pass turn-boundary tokens as eos_
 The fix took our generates from 30 seconds to 3 seconds. **Two orders of magnitude.** The kicker: this bug had been silently halving our eval throughput on every previous run. *Every* previous run. The 50-episode seller eval that took 5 hours? It was supposed to take ~30 minutes. We had been bleeding compute for weeks and we had no idea.
 
 I sat there. I thought about every wall-clock estimate I had given my teammate in the past month. They were all off by 10x.
+
+*(If you remember nothing else from this blog, remember this section. This is the most important paragraph. This is the paragraph where, if it lands for one person, the blog has paid for itself. `eos_token_id` as a list. Pass it. Today.)*
 
 > **Lesson from the trenches #7**: Modern instruction-tuned models have multiple end-of-turn tokens. The default tokenizer config does not always wire them all in. If your generation runs to `max_new_tokens` every time, this is your bug. Pass `eos_token_id` as a list. Now. Today. Before reading the next paragraph of this blog.
 
@@ -330,64 +344,51 @@ We did not fix this. It is on the future-work list. The transcript is going in t
 
 > **Lesson from the trenches #13**: A buyer with no memory will agree, walk away, and re-agree on every turn. This is not negotiation. This is goldfish theater. Pipe the last 2-3 turns into the obs. Or train the buyer on multi-turn coherence as a metric. Or both.
 
-## what we shipped
+## what exists right now (as I type this)
 
-After all that, here is the thing that exists:
+*(Time check, dear reader: it is the second day. The DPO smoke is still running. The HF Jobs dashboard says attempt 2 of 30 with the upgraded judge. I refresh it every fifteen minutes like a person checking a stock ticker. We have not finished. The list below is what is on HF and in this repo at the moment of typing. By the time you read this it may be longer. It will not be shorter.)*
 
 1. **OpenEnv-compliant FastAPI environment** with three negotiation tasks and seller personas. `/reset`, `/step`, `/state`, `/score`. Standard.
 2. **Sauda v2 buyer adapter** — Llama-3.1-8B + QLoRA SFT + GRPO. On HF: `PayMyBills/bestdealbot-v2`. Loads in 16GB bf16 or 5GB 4-bit.
 3. **Seller-quality 50-episode eval** — 5/6 acceptance criteria pass. Uploaded to HF dataset with full transcripts.
 4. **Scaling-ladder eval** — 3B base / 8B base / Sauda v2 across three tasks, 30 episodes each. Sauda wins. Numbers above.
-5. **Tells ablation** — surprising negative result. Reported honestly. Future work flagged.
+5. **Tells ablation** — surprising negative result. Reported honestly. To be revisited.
 6. **Live buyer endpoint** wired to the `/sell` page with HF Inference Endpoint (primary) + Ollama (fallback) backends. The `/sauda/health` endpoint probes both. The `/sauda/backends` endpoint feeds the UI dropdown.
-7. **DPO pipeline** scaffolded — `eval/build_dpo_pairs.py`, `eval/judge.py`, `training/v2/dpo.py`, `scripts/run_dpo_hfjobs.sh`. Smoke validates each stage. Reproducible with one command. Has not produced a v3-dpo adapter as of this writing because attempt 2 of 30 is still running.
+7. **DPO pipeline** scaffolded — `eval/build_dpo_pairs.py`, `eval/judge.py`, `training/v2/dpo.py`, `scripts/run_dpo_hfjobs.sh`. Smoke validates each stage. Reproducible with one command. Has not produced a v3-dpo adapter at the moment of typing because attempt 2 of 30 is still running. *(Refresh.)* Still attempt 2.
 
 The website does not crash on `/replay` anymore (commit `761fed8: Fix /replay crash: defensive optional chaining for state.offer_history / tells_history`). This was a six-line fix. It took me three hours to find because I assumed the bug was in the rendering and it was actually in the data shape because we had renamed a field two weeks earlier and not propagated.
 
-## what we'd do differently
+## what is happening right now
 
-Pin the opponent. Snapshot the seller version when reporting buyer metrics. Tag every eval with the opponent's git SHA.
+The DPO smoke is running. The HF Inference Endpoint for the live `/sell` buyer needs to be deployed before judges arrive — that is a click-through I am about to do, and if I forget, the page falls back to the Ollama path on my laptop, which works but ties the demo to my laptop staying awake. Also: the README needs a final pass to incorporate the scaling-ladder table and the tells-ablation result. Also: I need to stop writing this blog and go do that.
 
-Test inference loop speed before building any training pipeline that depends on it. If your generates are 30s, you have no debug signal for anything else.
+*(I will come back to this section when the day is done. There will be more rows in the "what exists" list. There will probably also be more bugs. The blog will grow downward, like a lazy plant. Bookmark this paragraph if you want to know when I'm back.)*
 
-Run the ablation early. We would have known the tells channel didn't help on day 2 instead of day 6 and we would have re-prioritized.
+## the running lessons list
 
-Write the heuristic judge against real transcripts, not against the spec. The spec is a lie.
+These are the lessons so far, all from the receipts above. The rule of this blog is that nothing on this list is hypothetical — each item has its own bug story, its own commit, its own moment where I sat at the laptop and made the face you make when you realize what you have done.
 
-`python -u` from day one. `eos_token_id` as a list from day one. `BUYER_DTYPE=bf16` from day one. Save yourself the cycles.
+- Pin the opponent. Snapshot the seller version when reporting buyer metrics. Tag every eval with the opponent's git SHA.
+- Test inference loop speed before building any training pipeline that depends on it. If your generates are 30s, you have no debug signal for anything else.
+- Run the ablation early. We would have known the tells channel didn't help on day 2 instead of day 6 and we would have re-prioritized.
+- Write the heuristic judge against real transcripts, not against the spec. The spec lies.
+- `python -u` from day one. `eos_token_id` as a list from day one. `BUYER_DTYPE=bf16` from day one. Save yourself the cycles.
+- Don't `echo "$X" | while read`. Use a heredoc.
+- When the model speaks Korean, it is gradient checkpointing during inference. Always.
+- When the seller walks on round 1, the walk threshold is too low.
+- When the buyer walks on round 8, the buyer's offer trajectory plateaus before reservation.
+- When the LLM says `{"action": "counter", "price": $reservation+1}` and you wanted accept, the LLM doesn't know reservation exists.
+- When you fix the seller, every old buyer number is now meaningless.
+- When the heuristic returns "tie" 30 times in a row, the heuristic is wrong, not the model.
 
-Don't `echo "$X" | while read`. Use a heredoc.
-
-When the model speaks Korean, it is gradient checkpointing during inference. Always.
-
-When the seller walks on round 1, the walk threshold is too low.
-
-When the buyer walks on round 8, the buyer's offer trajectory plateaus before reservation.
-
-When the LLM says `{"action": "counter", "price": $reservation+1}` and you wanted accept, the LLM doesn't know reservation exists.
-
-When you fix the seller, every old buyer number is now meaningless.
-
-When the heuristic returns "tie" 30 times in a row, the heuristic is wrong, not the model.
-
-## what we'd build next
-
-Train Sauda *with* tells in the loop, see if the ablation flips.
-
-Real human DPO pairs from the `/sell` page — log every (chosen, rejected) interaction the user makes when the live model is offered as two alternatives.
-
-Sauda v3-dpo, properly. The pipeline works. We just ran out of clock. (Smoke v8 is still on attempt 2 as I type this. We will see.)
-
-A 3B SFT row on the scaling ladder, to show "fine-tuning a 3B beats a prompted 8B" cleanly.
-
-Multi-turn coherence as a training objective so Sauda stops agreeing to deals it forgot it agreed to.
-
-A version of `eval/judge.py` that doesn't ever return tie unless the trajectories are *literally identical*. Force a winner. Always. The judge can make ties; the buyer can't learn from ties.
+*(This list will grow today. I can feel it.)*
 
 ---
 
-*Total cost: ~$25 of HF Jobs across the smoke debugging plus the overnight evals plus the seller-quality eval plus the DPO pipeline still cooking. Out of $90 team budget. **The mistakes were the cheap part. The lessons were free.***
+*Cost so far: ~$25 of HF Jobs across the smoke debugging plus the overnight evals plus the seller-quality eval plus the DPO pipeline that is still running in another tab. Out of $90 team budget. **The mistakes were the cheap part. The lessons are still being collected.***
 
 *Sauda v2 has accepted 91% of the deals it should have, walked away from 9% it shouldn't have taken, and at one point told a seller "32 mein de dijiye?" and then five turns later said "okay 27 — bas yahi ceiling hai." We are still investigating what happened in those five turns. We suspect goldfish theater.*
 
 *If any part of this post saves you from any of the bugs in this post, it has paid for itself. If you have made any of these bugs yourself, you are not alone. The thirteen lessons are scattered above like land mines. They are also all in the commit history. They are all real. None of them are fictionalized. The agent is named Sauda. The blog post is named after a sentence I said out loud at 4am.*
+
+*Reader: I am closing this tab now and going back to work. There is a website to wire, an endpoint to deploy, a smoke to babysit. I will be back. Probably with more lessons. Definitely with more commits. The post will keep growing for as long as the bugs do, which is to say, forever.*
