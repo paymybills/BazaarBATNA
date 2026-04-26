@@ -2,7 +2,7 @@
 
 > A live-from-the-venue hackathon journal. If you're looking for the responsible engineering write-up, this is not it. The buyer agent is named **Sauda** and at one point it agreed to a price and then five turns later said "27. done?" like that was a normal thing to do.
 
-> *(Reader: I am writing this between bug fixes. The DPO smoke is on attempt 2 of 30 in another tab. We have not finished. By the time you read this we may have. Or may not have. The blog is being committed in real time alongside the code. Anyway.)*
+> *(Reader, I am writing this between bug fixes. The DPO smoke is on attempt 2 of 30 in another tab. We have not finished. By the time you read this we may have. Or may not have. The blog is being committed in real time alongside the code. Anyway.)*
 
 ## the premise
 
@@ -296,13 +296,80 @@ The website does not crash on `/replay` anymore (commit `761fed8: Fix /replay cr
 
 ## what is happening right now
 
-The DPO smoke is running. The HF Inference Endpoint for the live `/sell` buyer needs to be deployed before judges arrive — that is a click-through I am about to do, and if I forget, the page falls back to the Ollama path on my laptop, which works but ties the demo to my laptop staying awake. Also: the README needs a final pass to incorporate the scaling-ladder table and the tells-ablation result. Also: I need to stop writing this blog and go do that.
+Two DPO jobs are running in parallel — the smoke I fired this morning on `a100-large` after the first run lost its rollouts, and a real run on `l40sx1` that I queued an hour later after I figured out the queue trick. The smoke validates the new per-pair upload logic. The l40sx1 actually produces an adapter. Both write to different output repos so they cannot collide. The HF Inference Endpoint for the live `/sell` buyer needs to be deployed before judges arrive — that is a click-through I am about to do, and if I forget, the page falls back to the Ollama path on my laptop, which works but ties the demo to my laptop staying awake. Also: the README needs a final pass to incorporate the scaling-ladder table and the tells-ablation result. Also: I need to stop writing this blog and go do that.
 
 *(I will come back to this section when the day is done. There will be more rows in the "what exists" list. There will probably also be more bugs. The blog will grow downward, like a lazy plant. Bookmark this paragraph if you want to know when I'm back.)*
 
+## the four-hour rollout that bash ate
+
+*(We are now in the final two-hour stretch. I am writing this paragraph between refreshes of two HF Jobs dashboards, which is a thing I have started doing without irony.)*
+
+The DPO pipeline I described in the previous section as "scaffolded" produced its first real run last night. Four hours on a10g-largex2. Thirty pairs targeted, twenty-three accepted by the judge. The rollout loop finished. The training script never ran.
+
+The crash, in full:
+
+```
++ PAIRS_COMMIT_MSG=pairs built from  vs google/gemma-4-E4B, n=30
+$BUYER_MODEL: unbound variable
+```
+
+The bash script that uploads the pairs file to a dataset repo reads `${BUYER_MODEL}` in its commit message. There is no `BUYER_MODEL` env var. There is `BUYER_BASE` and `BUYER_ADAPTER`. I had written the upload step in a hurry, picked a name that didn't exist, and the typo sat in the script for two weeks because every previous smoke run died earlier and never reached this line. With `set -eu`, the unbound expansion killed the script *immediately after* the rollout finished and *before* the pairs file uploaded. Four hours of rollouts existed only inside the container's ephemeral disk. The container shut down. The pairs went with it.
+
+I spent eight minutes staring at the log trying to understand what `$BUYER_MODEL` was supposed to be and why it wasn't set, before realizing it was supposed to be nothing. I had typed the wrong variable name. The fix was four characters.
+
+> **Lesson from the trenches #7**: `set -eu` plus a heredoc plus a typoed variable name plus a four-hour expensive computation is a configuration the universe will eventually exploit. Quote your heredocs (`<<'EOF'`). Or read environment variables from `os.environ` inside Python. Or — and this is the actual lesson — **upload incrementally**. The pairs file should hit HF after every accepted pair, not after the loop terminates. If the script crashes, the pairs survive.
+
+I rewrote the rollout loop to flush the JSONL and `HfApi.upload_file` after every accepted pair, wrapped in a try/except that prints a warning and continues. The next run could die at any line and the pairs would still be on HF. Then I committed the variable-name fix. Then I lost another twelve minutes to HF's `/whoami-v2` rate limiter when I tried to re-submit the job too quickly. Then I tried to use the most overkill maxxed out GPU, which it turns out is `h200`, but `h200` was rejected with `Error: Invalid value for '--flavor': 'h100' is not one of …` because I'd typoed *that* too. I picked `a100-large` instead. The job sat in the SCHEDULING stage for twenty minutes. I fired a parallel job on `l40sx1` (48GB VRAM, no queue, half the price), and **that** one started RUNNING within 30 seconds. The a100-large finally moved to RUNNING right as the l40sx1 was already five minutes in. Both are running as I type this.
+
+> **Lesson from the trenches #8**: Hardware availability is a function of brand recognition. Everyone fights for `a100`. Almost nobody picks `l40sx1`. The L40S has 48GB of VRAM, runs 8B in bf16 comfortably, costs roughly half, and the queue is empty because the name doesn't match anyone's mental model of "the GPU you train on." If you don't need 80GB, pick the unfashionable card.
+
+## the monotonicity guard that wasn't
+
+*(While the DPO jobs run, I am playing the live `/sell` page myself, which is the surest way to find bugs in it.)*
+
+I sent Sauda an offer of 175 for an item it had counter-offered at 140 on. I added "im sorry 170 and im making a loss, theres 3 other offers that ive got" — the kind of pressure-and-bluff combination the seller-tells channel is supposed to detect. Sauda replied with **139**.
+
+A buyer that decreases its own offer mid-negotiation is incoherent. I'd added a monotonicity guard exactly to prevent this — if the model proposes a price below `own_last_offer`, bump it back up to `own_last_offer + small_concession`. The guard was running. The buyer still went 140 → 139.
+
+The bug was on the line *after* the bump:
+
+```python
+steered_price = min(ceiling_offer, own_last_offer + bump)
+```
+
+`ceiling_offer` is the buyer's max acceptable price, computed from the seller's ask. When the seller raises ask and the buyer's budget is tight, `ceiling_offer` can fall *below* `own_last_offer` from a previous round. The `min()` then drags `steered_price` back down to `ceiling_offer`, undoing the entire purpose of the guard. I had written a guard that protected against the model retreating but not against the *ceiling* retreating, which is the same thing in different clothing.
+
+The fix:
+
+```python
+target = max(own_last_offer, min(ceiling_offer, own_last_offer + bump))
+```
+
+If the ceiling has dropped below where the buyer already committed, hold at `own_last_offer`. Don't bump up (we can't), but don't slide down (we won't).
+
+> **Lesson from the trenches #9**: When you write a guard, the invariant is the floor of the new value, not the input to a clamp. `max(invariant, …)` is the shape. `min(ceiling, max(floor, x))` is correct. `max(floor, min(ceiling, x))` is the same expression algebraically but only when ceiling > floor. The day ceiling < floor — and there is always such a day — the order matters and the guard fails silently.
+
+## the patterns that didn't pattern
+
+The same negotiation revealed a second bug. The "What Sauda reads" panel on the right side of the page lit up with zeros even though I had typed *"3 other offers that ive got"* — a textbook deception cue. The pattern file in `nlp/keyword_patterns.py` had ten regexes for deception, including the gold-standard CaSiNo cue `\bteen\s+aur\s+log\b` ("three other people"). It had no English-with-digits version. It also had nothing for "making a loss," which is one of the most common urgency-via-sympathy plays in actual seller speech. Patterns covered the Hinglish domain I'd hand-curated from the dataset and missed the English variants I would obviously type when playing the page myself.
+
+The fix was three new regexes for English numeric deception (`\b(\d+|two|three|...)\s+(other\s+|more\s+)?(offers?|buyers?|...)\b`) and three for sympathy-urgency (`\b(im|i am)\s+making\s+a\s+los(s|ing)\b`, etc.). I curl'd `/highlight` against my exact deception sentence and watched the spans light up. 0.75 deception. 0.55 urgency.
+
+> **Lesson from the trenches #10**: Patterns mined from a dataset cover the dataset's distribution, not the user's. Test against your own typing. Especially if your dataset is in one language and your demo runs in another.
+
+## the bonus that didn't math
+
+The `/sell` page tells the seller (i.e., the human) "you earn $1 per $1k above your reservation, capped at $10." This wording is a direct copy of the Chicago HAI / Kellogg study brief that inspired the page. The Kellogg study used houses. Houses cost hundreds of thousands of dollars. The reservation gap is plausibly $1k+.
+
+The page I built uses Craigslist listings. A vintage hat rack with a $399 ask price and a $311 reservation has a $88 gap. You cannot earn $1 above $1k of $88. The bonus structure was mathematically unreachable on every listing in the catalog. I didn't notice for a week because I was always running the negotiation and watching the buyer, not reading my own seller brief.
+
+I rewrote it: $1 per $10 above reservation, capped at 10% of (ask − reservation). The same hat rack now has a $9 max bonus, hit at the asking price, with linear payouts in between. The structure preserves the *spirit* of the Kellogg setup — there is a real reservation, a real bonus gradient, a real cliff at the floor — without the residual unit assumption that we are selling houses.
+
+> **Lesson from the trenches #11**: When you copy an experimental setup, copy the *structure* and re-derive the *parameters*. The Kellogg study's $1-per-$1k was tuned for a $200k mean transaction. Yours is $200. You need a different scale, not a different paragraph.
+
 ## the running lessons list
 
-The six numbered lessons above are the ones that survived editing. There were thirteen at one point. Several of them turned out to be variations on the same lesson, or just shell trivia that wasn't worth a quote block. These six are the ones I would still hand to past-me at the start of the project:
+The eleven numbered lessons above are the ones that survived editing. There were eighteen at one point. Several of them turned out to be variations on the same lesson, or just shell trivia that wasn't worth a quote block. These eleven are the ones I would still hand to past-me at the start of the project:
 
 - **#1** — SFT is the easiest part of the trilogy. Inference is where the bugs live.
 - **#2** — Pin the opponent. Snapshot the seller. Otherwise old screenshots lie about a different game.
@@ -310,8 +377,13 @@ The six numbered lessons above are the ones that survived editing. There were th
 - **#4** — Write your fallbacks against real data. Specs lie about which side accepts.
 - **#5** — Test the feature. The feature not working is the second-best outcome because you can fix it.
 - **#6** — A buyer with no memory will agree, walk away, and re-agree on every turn. Multi-turn coherence is a training objective, not a runtime hope.
+- **#7** — `set -eu` + heredoc + typoed variable + four-hour computation is a configuration the universe will exploit. Upload incrementally; let crashes be cheap.
+- **#8** — The cool GPU has a queue. Pick the unfashionable card with the same VRAM and start training while the rest of the world waits for `a100`.
+- **#9** — A guard is `max(invariant, …)`, not a clamp. `min(ceiling, max(floor, x))` ≠ `max(floor, min(ceiling, x))` the day ceiling < floor — and there is always such a day.
+- **#10** — Patterns mined from a dataset cover the dataset's distribution, not the user's typing. Curl your own endpoints against the sentences you would actually write.
+- **#11** — When you port an experimental setup across domains, port the structure and re-derive the parameters. Kellogg's $1-per-$1k assumes the transaction is a house.
 
-There are also smaller diagnostic shorthands the project taught me — when the model speaks Korean it's gradient checkpointing during inference, when the heuristic returns "tie" thirty times in a row it's the heuristic, when the seller walks on round 1 the walk threshold is too low — but those are tips, not lessons.
+There are also smaller diagnostic shorthands the project taught me — when the model speaks Korean it's gradient checkpointing during inference, when the heuristic returns "tie" thirty times in a row it's the heuristic, when the seller walks on round 1 the walk threshold is too low, when the buyer offers $139 after offering $140 you have a `min(ceiling, …)` where you wanted `max(own_last_offer, …)` — but those are tips, not lessons.
 
 ---
 
