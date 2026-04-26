@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { apiGet } from "../lib/api";
@@ -15,10 +15,39 @@ const links = [
   { href: "/replay", label: "Replay" },
 ];
 
+function scrollToAnchor(hash: string) {
+  if (typeof window === "undefined") return;
+  const el = document.getElementById(hash.replace(/^#/, ""));
+  if (!el) return;
+  // Lenis is wired in app-shell; falls back to native smooth-scroll if not.
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Update URL without route navigation so user can share the deep link.
+  if (window.location.hash !== hash) {
+    history.replaceState(null, "", hash);
+  }
+}
+
 export function Nav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [healthy, setHealthy] = useState<boolean | null>(null);
+
+  function handleNavClick(href: string, e: React.MouseEvent) {
+    // Anchor links: route to landing if not there, else just scroll
+    if (href.startsWith("/#")) {
+      const hash = href.replace(/^\//, "");
+      if (pathname === "/") {
+        e.preventDefault();
+        scrollToAnchor(hash);
+      } else {
+        // On a different route, navigate to landing with the hash, scroll
+        // happens after page mount via the hash listener below.
+        e.preventDefault();
+        router.push(href);
+      }
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
