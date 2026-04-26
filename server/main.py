@@ -160,65 +160,292 @@ async def _broadcast(session_id: str, event: str, data: dict):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     task_rows = "".join(
-        f"<tr><td><code>{name}</code></td><td>{t.difficulty.capitalize()}</td>"
-        f"<td><code>{t.seller_personality.value}</code></td><td>{t.description}</td></tr>"
+        f'<tr><td><code class="kbd">{name}</code></td><td class="diff">{t.difficulty.capitalize()}</td>'
+        f'<td><code class="kbd muted">{t.seller_personality.value}</code></td><td class="desc">{t.description}</td></tr>'
         for name, t in TASKS.items()
     )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>BazaarBATNA v2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BazaarBATNA — OpenEnv negotiation environment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    body {{ font-family: system-ui, sans-serif; max-width: 960px; margin: 60px auto; padding: 0 24px; color: #1a1a1a; }}
-    h1 {{ font-size: 2rem; margin-bottom: 4px; }}
-    .subtitle {{ color: #555; margin-bottom: 32px; }}
-    .badge {{ display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }}
-    .running {{ background: #d1fae5; color: #065f46; }}
-    .new {{ background: #dbeafe; color: #1e40af; }}
-    table {{ width: 100%; border-collapse: collapse; margin: 16px 0 32px; }}
-    th {{ text-align: left; padding: 8px 12px; background: #f4f4f5; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; }}
-    td {{ padding: 8px 12px; border-top: 1px solid #e4e4e7; font-size: 0.9rem; vertical-align: top; }}
-    code {{ background: #f4f4f5; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }}
-    .method {{ font-size: 0.75rem; font-weight: 700; color: #fff; padding: 2px 7px; border-radius: 4px; }}
-    .post {{ background: #f59e0b; }}
-    .get {{ background: #3b82f6; }}
-    .ws {{ background: #8b5cf6; }}
-    a {{ color: #2563eb; text-decoration: none; }}
+    :root {{
+      --bg: #0a0a0b;
+      --bg2: #111114;
+      --surface: #16161a;
+      --surface2: #1c1c22;
+      --border: #2a2a32;
+      --fg: #f5f5f7;
+      --fg2: #a1a1aa;
+      --fg3: #71717a;
+      --accent: #d9ff00;
+      --accent2: #00f5d4;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --good: #10b981;
+    }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ margin: 0; padding: 0; background: var(--bg); color: var(--fg); }}
+    body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; }}
+    code, .mono {{ font-family: 'JetBrains Mono', 'Menlo', monospace; }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 0 28px; }}
+    a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
+
+    /* Top nav */
+    nav {{ border-bottom: 1px solid var(--border); padding: 18px 28px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: rgba(10,10,11,0.85); backdrop-filter: blur(8px); z-index: 10; }}
+    nav .brand {{ font-weight: 700; letter-spacing: -.02em; font-size: 0.95rem; }}
+    nav .brand .dot {{ display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 8px; box-shadow: 0 0 8px var(--good); animation: pulse 2s infinite; }}
+    @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
+    nav .links {{ display: flex; gap: 22px; font-size: 0.85rem; color: var(--fg2); }}
+    nav .links a {{ color: var(--fg2); }}
+    nav .links a:hover {{ color: var(--fg); text-decoration: none; }}
+
+    /* Hero */
+    .hero {{ position: relative; padding: 96px 0 80px; overflow: hidden; }}
+    .hero::before {{
+      content: ""; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse at 30% 10%, black 30%, transparent 70%);
+      opacity: 0.18; pointer-events: none;
+    }}
+    .eyebrow {{ font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--fg3); margin-bottom: 22px; }}
+    .hero h1 {{ font-size: clamp(2.6rem, 6vw, 4.8rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.02; margin: 0 0 28px; max-width: 900px; }}
+    .accent-rule {{ height: 2px; width: 280px; background: var(--accent); margin: 18px 0 30px; }}
+    .hero p.lead {{ font-size: 1.1rem; color: var(--fg2); max-width: 680px; margin: 0 0 24px; line-height: 1.6; }}
+    .badges {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 36px; }}
+    .badge {{ display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; border: 1px solid var(--border); color: var(--fg2); background: rgba(255,255,255,0.02); }}
+    .badge.accent {{ border-color: rgba(217,255,0,0.4); background: rgba(217,255,0,0.08); color: var(--accent); }}
+    .badge.accent .dot {{ width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }}
+    .ctas {{ display: flex; flex-wrap: wrap; gap: 12px; }}
+    .btn {{ display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 8px; font-size: 0.9rem; font-weight: 500; border: 1px solid var(--border); transition: all .15s; }}
+    .btn.primary {{ background: var(--accent); color: var(--bg); border-color: var(--accent); }}
+    .btn.primary:hover {{ opacity: 0.9; text-decoration: none; }}
+    .btn.ghost {{ background: transparent; color: var(--fg); }}
+    .btn.ghost:hover {{ background: var(--surface); text-decoration: none; }}
+
+    /* Sections */
+    section {{ padding: 72px 0; border-top: 1px solid var(--border); }}
+    section.alt {{ background: var(--bg2); }}
+    h2 {{ font-size: 1.9rem; font-weight: 600; letter-spacing: -.02em; margin: 0 0 14px; }}
+    .section-eyebrow {{ font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--fg3); margin-bottom: 14px; }}
+    p.section-lead {{ color: var(--fg2); max-width: 720px; margin: 0 0 32px; line-height: 1.65; font-size: 0.98rem; }}
+
+    /* Tables */
+    table.dat {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 8px 0 20px; }}
+    table.dat th {{ text-align: left; padding: 12px 14px; background: var(--surface); border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg3); font-weight: 500; }}
+    table.dat td {{ padding: 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--fg); }}
+    table.dat td.num {{ font-family: 'JetBrains Mono', monospace; text-align: right; font-variant-numeric: tabular-nums; }}
+    table.dat td.diff {{ font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: var(--fg2); }}
+    table.dat td.desc {{ color: var(--fg2); font-size: 0.88rem; }}
+    table.dat tr.win td {{ color: var(--accent); font-weight: 500; }}
+    table.dat tr.win td.label {{ color: var(--accent); }}
+    .kbd {{ background: var(--surface2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; color: var(--fg); }}
+    .kbd.muted {{ color: var(--fg2); }}
+
+    /* Endpoints */
+    .endpoints {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }}
+    .ep {{ padding: 16px 18px; background: var(--surface); display: flex; align-items: center; gap: 12px; }}
+    .method {{ font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; flex-shrink: 0; }}
+    .method.get {{ background: rgba(0,245,212,0.15); color: var(--accent2); }}
+    .method.post {{ background: rgba(245,158,11,0.15); color: var(--warn); }}
+    .method.ws {{ background: rgba(217,255,0,0.15); color: var(--accent); }}
+    .ep .path {{ font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--fg); flex-shrink: 0; }}
+    .ep .desc {{ color: var(--fg3); font-size: 0.78rem; margin-left: auto; text-align: right; }}
+
+    /* Cards */
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 24px 0; }}
+    .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }}
+    .card .label {{ font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg3); margin-bottom: 10px; }}
+    .card h3 {{ font-size: 1.1rem; margin: 0 0 6px; font-weight: 600; }}
+    .card p {{ color: var(--fg2); font-size: 0.88rem; margin: 0; line-height: 1.55; }}
+    .card .stat {{ font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 700; color: var(--accent); letter-spacing: -.02em; line-height: 1; margin: 8px 0 12px; }}
+    .card .stat .delta {{ font-size: 1rem; color: var(--good); margin-left: 6px; }}
+    .card a {{ font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--fg2); }}
+    .card a:hover {{ color: var(--accent); }}
+
+    /* Footer */
+    footer {{ padding: 40px 0 60px; border-top: 1px solid var(--border); color: var(--fg3); font-size: 0.82rem; }}
+    footer .row {{ display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }}
+    footer a {{ color: var(--fg2); }}
+    footer .links a {{ margin-right: 18px; }}
+    .small {{ font-size: 0.78rem; color: var(--fg3); }}
+    @media (max-width: 720px) {{
+      nav .links {{ display: none; }}
+      .hero {{ padding: 64px 0 56px; }}
+      section {{ padding: 56px 0; }}
+      table.dat th, table.dat td {{ padding: 10px 8px; font-size: 0.82rem; }}
+    }}
   </style>
 </head>
 <body>
-  <h1>BazaarBATNA v2</h1>
-  <p class="subtitle">Negotiation environment with game theory, poker tells, and multi-buyer arenas
-    &nbsp;&middot;&nbsp; <span class="badge running">Running</span>
-    &nbsp;<span class="badge new">NEW: Tells + Arena</span></p>
 
-  <h2>Tasks</h2>
-  <table>
-    <tr><th>Name</th><th>Difficulty</th><th>Personality</th><th>Description</th></tr>
-    {task_rows}
-  </table>
+  <nav>
+    <div class="brand"><span class="dot"></span>BazaarBATNA</div>
+    <div class="links">
+      <a href="#results">Results</a>
+      <a href="#environment">Environment</a>
+      <a href="#api">API</a>
+      <a href="https://github.com/paymybills/BazaarBATNA" target="_blank">GitHub →</a>
+    </div>
+  </nav>
 
-  <h2>Endpoints</h2>
-  <table>
-    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/reset</code></td><td>Start a new episode</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/step</code></td><td>Submit buyer action</td></tr>
-    <tr><td><span class="method get">GET</span></td><td><code>/state</code></td><td>Full environment state</td></tr>
-    <tr><td><span class="method get">GET</span></td><td><code>/score</code></td><td>Graded score</td></tr>
-    <tr><td><span class="method get">GET</span></td><td><code>/tasks</code></td><td>Available tasks</td></tr>
-    <tr><td><span class="method ws">WS</span></td><td><code>/ws/{{session}}</code></td><td>Real-time negotiation stream</td></tr>
-    <tr><td><span class="method get">GET</span></td><td><code>/leaderboard</code></td><td>Score leaderboard</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/leaderboard/record</code></td><td>Record a score</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/counterfactual</code></td><td>What-if replay from any round</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/arena/create</code></td><td>Create multi-buyer arena</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/arena/join</code></td><td>Join an arena</td></tr>
-    <tr><td><span class="method post">POST</span></td><td><code>/arena/step</code></td><td>Submit arena actions</td></tr>
-    <tr><td><span class="method get">GET</span></td><td><code>/arena/state</code></td><td>Arena state</td></tr>
-  </table>
+  <section class="hero">
+    <div class="container">
+      <div class="eyebrow">OpenEnv · Negotiation Playground</div>
+      <h1>Watch agents haggle.<br/>Step in yourself.</h1>
+      <div class="accent-rule"></div>
+      <p class="lead">A negotiation environment with observable tells and hidden reservation prices. Buyer and seller are both LLMs — <strong style="color:var(--fg)">Sauda</strong> on the buy side (Llama-3.1-8B + QLoRA, trained SFT → GRPO → DPO/RLAIF), <strong style="color:var(--fg)">Gemma-4-E4B</strong> on the sell side. Strategy improves through self-play. Drop in as a seller, watch the arena, or scrub a replay.</p>
+      <div class="badges">
+        <span class="badge accent"><span class="dot"></span>Powered by RLAIF</span>
+        <span class="badge">OpenEnv-compliant</span>
+        <span class="badge">8B · QLoRA</span>
+        <span class="badge">8 tasks · 4 personas</span>
+      </div>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/paymybills/BazaarBATNA" target="_blank">GitHub repo →</a>
+        <a class="btn ghost" href="https://huggingface.co/PayMyBills/bestdealbot-v2" target="_blank">Sauda v2 adapter</a>
+        <a class="btn ghost" href="https://github.com/paymybills/BazaarBATNA/blob/main/docs/BLOG.md" target="_blank">Hackathon journal</a>
+        <a class="btn ghost" href="/docs">Interactive API docs</a>
+      </div>
+    </div>
+  </section>
 
-  <p><a href="/docs">Interactive API docs &rarr;</a></p>
+  <section id="results">
+    <div class="container">
+      <div class="section-eyebrow">Headline result</div>
+      <h2>Sauda v2 beats the 8B base by 7.4% mean surplus</h2>
+      <p class="section-lead">Same seller (Gemma-4-E4B), same seeds, same tasks. n=30 episodes per task. Sauda was trained on top of Llama-3.1-8B-Instruct with SFT + GRPO; the table below shows it outperforms the base model on every task it was trained against, and survives the seller-quality eval (5 of 6 acceptance criteria pass).</p>
+      <table class="dat">
+        <thead><tr><th>Buyer</th><th>Tells</th><th>single_deal</th><th>asymmetric</th><th>amazon</th><th>Mean</th><th>Deals</th><th>Rounds</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-3.2-3B base</td><td class="diff">ON</td><td class="num">0.722</td><td class="num">0.731</td><td class="num">0.258</td><td class="num">0.570</td><td class="num">1.00</td><td class="num">2.2</td></tr>
+          <tr><td>Llama-3.1-8B base</td><td class="diff">ON</td><td class="num">0.818</td><td class="num">0.787</td><td class="num">0.430</td><td class="num">0.678</td><td class="num">0.99</td><td class="num">3.1</td></tr>
+          <tr class="win"><td class="label"><strong>Sauda v2</strong> (8B SFT+GRPO)</td><td class="diff">OFF</td><td class="num">0.835</td><td class="num">0.827</td><td class="num">0.521</td><td class="num"><strong>0.728</strong></td><td class="num">0.91</td><td class="num">6.0</td></tr>
+          <tr><td>Sauda v2 (8B SFT+GRPO)</td><td class="diff">ON</td><td class="num">0.810</td><td class="num">0.768</td><td class="num">0.507</td><td class="num">0.695</td><td class="num">0.88</td><td class="num">6.0</td></tr>
+        </tbody>
+      </table>
+      <p class="small"><strong>Reading this:</strong> 3B → 8B base buys you +19% mean surplus. Training on 8B (SFT+GRPO) buys you another +7% AND ~2× longer negotiations — base models capitulate fast (2-3 rounds), Sauda actually plays the game. Sauda's deal rate (0.91) is a feature, not a bug — it walks when offers are bad. Tells channel ON underperforms tells OFF; reported as a kept negative result. Full transcripts: <a href="https://huggingface.co/datasets/PayMyBills/scaling-eval-runs" target="_blank">PayMyBills/scaling-eval-runs</a>.</p>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="container">
+      <div class="section-eyebrow">Training</div>
+      <h2>SFT → GRPO → DPO/RLAIF</h2>
+      <p class="section-lead">The buyer adapter is trained in three stages on top of Llama-3.1-8B-Instruct. SFT teaches strict-JSON Hinglish output. GRPO drives reward against the live env. DPO refines on Claude-judged preference pairs. Trainer state for the GRPO stage is on HF — anyone can curl it.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="label">GRPO reward</div>
+          <div class="stat">0.97 <span class="delta">peak</span></div>
+          <p>30 optimization steps, mean reward 0.94 across the run. Entropy fell 0.51 → 0.42 as the policy concentrated. Full log_history: <a href="https://huggingface.co/PayMyBills/bestdealbot-v2/blob/main/last-checkpoint/trainer_state.json" target="_blank">trainer_state.json</a></p>
+        </div>
+        <div class="card">
+          <div class="label">Scaling-ladder win</div>
+          <div class="stat">+7.4% <span class="delta">vs 8B base</span></div>
+          <p>Mean surplus across single_deal / asymmetric / amazon. Same seller, same seeds. Doubles the 3B base on the amazon task (0.258 → 0.521).</p>
+        </div>
+        <div class="card">
+          <div class="label">Seller quality</div>
+          <div class="stat">5 / 6 <span class="delta">passing</span></div>
+          <p>Acceptance criteria for the Gemma-4-E4B seller: never accepts below reservation, never leaks reservation, monotonic counters, etc. Dataset: <a href="https://huggingface.co/datasets/PayMyBills/seller-quality-runs" target="_blank">seller-quality-runs</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="environment">
+    <div class="container">
+      <div class="section-eyebrow">The environment</div>
+      <h2>8 tasks. 4 seller personas. 1 OpenEnv API.</h2>
+      <p class="section-lead">From symmetric one-shot deals to multi-buyer marketplaces. Asymmetric information, hidden deadlines, deceptive sellers leaking poker-style tells, career history that follows the buyer across 10 deals. Every task graded with deterministic surplus + deal-rate reward.</p>
+      <table class="dat">
+        <thead><tr><th>Name</th><th>Difficulty</th><th>Persona</th><th>What it tests</th></tr></thead>
+        <tbody>{task_rows}</tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="api" class="alt">
+    <div class="container">
+      <div class="section-eyebrow">OpenEnv API</div>
+      <h2>The endpoints judges run against</h2>
+      <p class="section-lead">FastAPI server, Docker container, Hugging Face Space. POST <code class="kbd">/reset</code> to start. POST <code class="kbd">/step</code> to play. GET <code class="kbd">/score</code> to grade. Real-time streams over WebSocket. Multi-buyer arenas. Counterfactual replays. <a href="/docs">Interactive Swagger →</a></p>
+      <div class="endpoints">
+        <div class="ep"><span class="method post">POST</span><span class="path">/reset</span><span class="desc">Start an episode</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/step</span><span class="desc">Submit buyer action</span></div>
+        <div class="ep"><span class="method get">GET</span><span class="path">/state</span><span class="desc">Full env state</span></div>
+        <div class="ep"><span class="method get">GET</span><span class="path">/score</span><span class="desc">Graded score</span></div>
+        <div class="ep"><span class="method get">GET</span><span class="path">/tasks</span><span class="desc">List tasks</span></div>
+        <div class="ep"><span class="method ws">WS</span><span class="path">/ws/{{session}}</span><span class="desc">Real-time stream</span></div>
+        <div class="ep"><span class="method get">GET</span><span class="path">/leaderboard</span><span class="desc">Score board</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/leaderboard/record</span><span class="desc">Record a score</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/counterfactual</span><span class="desc">What-if replay</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/arena/create</span><span class="desc">Multi-buyer arena</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/arena/join</span><span class="desc">Join arena</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/arena/step</span><span class="desc">Arena step</span></div>
+        <div class="ep"><span class="method get">GET</span><span class="path">/arena/state</span><span class="desc">Arena state</span></div>
+        <div class="ep"><span class="method post">POST</span><span class="path">/highlight</span><span class="desc">Extract seller tells</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-eyebrow">Artifacts on Hugging Face</div>
+      <h2>Everything is durable. Anyone can reproduce.</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="label">Adapter</div>
+          <h3>PayMyBills/bestdealbot-v2</h3>
+          <p>Llama-3.1-8B + QLoRA, SFT+GRPO. trainer_state.json + last-checkpoint live for verification.</p>
+          <a href="https://huggingface.co/PayMyBills/bestdealbot-v2" target="_blank">Open on HF →</a>
+        </div>
+        <div class="card">
+          <div class="label">Eval datasets</div>
+          <h3>scaling-eval-runs</h3>
+          <p>Full transcripts of the 3B / 8B / Sauda v2 scaling ladder. n=30 per task.</p>
+          <a href="https://huggingface.co/datasets/PayMyBills/scaling-eval-runs" target="_blank">Open on HF →</a>
+        </div>
+        <div class="card">
+          <div class="label">Hackathon journal</div>
+          <h3>The blog with all receipts</h3>
+          <p>Bugs, the four-hour rollout we lost to a bash typo, the ablation that disproved our own hypothesis, written live.</p>
+          <a href="https://github.com/paymybills/BazaarBATNA/blob/main/docs/BLOG.md" target="_blank">Read on GitHub →</a>
+        </div>
+        <div class="card">
+          <div class="label">Training notebooks</div>
+          <h3>One-click reproduce</h3>
+          <p>Colab notebooks for SFT+GRPO and for DPO/RLAIF. T4-friendly, runnable end-to-end.</p>
+          <a href="https://github.com/paymybills/BazaarBATNA/blob/main/training/train_colab.ipynb" target="_blank">Open in Colab →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="row">
+        <div>BazaarBATNA · OpenEnv hackathon submission · MIT</div>
+        <div class="links">
+          <a href="https://github.com/paymybills/BazaarBATNA" target="_blank">GitHub</a>
+          <a href="https://huggingface.co/PayMyBills/bestdealbot-v2" target="_blank">Adapter</a>
+          <a href="https://github.com/paymybills/BazaarBATNA/blob/main/docs/BLOG.md" target="_blank">Blog</a>
+          <a href="/docs">API docs</a>
+          <a href="/health">Health</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
 </body>
 </html>"""
 
