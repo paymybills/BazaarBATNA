@@ -10,12 +10,21 @@ pinned: false
 
 # BazaarBATNA
 
-BazaarBATNA is an OpenEnv-compliant negotiation project with two deliverables:
+BazaarBATNA is an OpenEnv-compliant negotiation environment with two LLM agents that improve through self-play:
 
-1. **BazaarBATNA Platform** — the environment, API server, tasks, UI, replay/arena systems.
-2. **Sauda Agent** (the buyer, also known as `bestdealbot` on HF) — trained buyer model + the inference/evaluation pipeline.
+- **Sauda** on the buy side — Llama-3.1-8B + QLoRA, trained through **SFT → GRPO → RLAIF/DPO** on this env.
+- **Gemma-4-E4B** on the sell side — prompted with persona + four hardened rules baked into code (never accept below reservation, never leak it, counter monotonically, etc).
 
-> 🪧 **Live journal:** [`docs/BLOG.md`](docs/BLOG.md) is the unfiltered hackathon log — bugs, dependency hell, the ablation that disproved our own hypothesis, all the receipts.
+Both sides infer through asymmetric information. The buyer never sees the seller's reservation. The seller never sees the buyer's budget. **Strategy comes from training, not rules.** The site is for playing against Sauda, watching the arena, or scrubbing replays. The repo is for training your own.
+
+> **Live journal:** [`docs/BLOG.md`](docs/BLOG.md) is the unfiltered hackathon log — bugs, the ablation that disproved our own hypothesis, the goldfish-theater transcript, all the receipts.
+
+**Stack:**
+
+- Training: SFT → GRPO → **RLAIF/DPO** (Claude judges preference pairs, buyer learns from the wins)
+- Inference: HF Inference Endpoint primary, Ollama fallback, dual-backend with `/sauda/health`
+- Bayesian seller-tell steering on top of the raw model action
+- OpenEnv-compliant FastAPI server (`/reset`, `/step`, `/state`, `/score`, `/tasks`)
 
 ## Headline results
 

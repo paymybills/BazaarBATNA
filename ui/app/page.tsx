@@ -14,6 +14,7 @@ function Hero() {
   const ruleRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
   const eyebrowRef = useRef<HTMLDivElement>(null);
+  const stackRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     const title = titleRef.current;
@@ -35,7 +36,8 @@ function Hero() {
       .to(words, { opacity: 1, y: 0, duration: 0.9, stagger: 0.07 }, 0.1)
       .to(ruleRef.current, { scaleX: 1, duration: 1.0, ease: "power2.inOut" }, 0.4)
       .to(subRef.current, { opacity: 1, y: 0, duration: 0.6 }, 0.6)
-      .to(ctaRef.current, { opacity: 1, y: 0, duration: 0.6 }, 0.8);
+      .to(stackRef.current, { opacity: 1, y: 0, duration: 0.5 }, 0.85)
+      .to(ctaRef.current, { opacity: 1, y: 0, duration: 0.6 }, 1.0);
   }, []);
 
   return (
@@ -62,10 +64,17 @@ function Hero() {
           ref={subRef}
           className="opacity-0 translate-y-3 max-w-2xl mt-8 text-fg2 text-lg leading-relaxed"
         >
-          BazaarBATNA is a negotiation environment with observable tells, hidden
-          reservation prices, and a buyer agent that reads what the seller
-          doesn&apos;t say. Drop in as a seller, watch the arena, or scrub a
-          replay.
+          A negotiation environment with observable tells and hidden reservation
+          prices. Buyer and seller are both LLMs — Sauda (Llama-3.1-8B,
+          SFT + GRPO + RLAIF/DPO) on the buy side, Gemma-4-E4B on the sell
+          side. Strategy improves through self-play; you can drop in as a seller,
+          watch the arena, or scrub a replay.
+        </p>
+        <p
+          ref={stackRef}
+          className="opacity-0 translate-y-3 max-w-2xl mt-3 text-meta text-xs leading-relaxed font-mono"
+        >
+          stack: SFT → GRPO → RLAIF/DPO · Bayesian seller-tell steering · OpenEnv-compliant FastAPI
         </p>
 
         <div
@@ -485,12 +494,13 @@ function Story() {
           </p>
         </div>
         <div>
-          <div className="text-h2 mb-3">An env worth playing on.</div>
+          <div className="text-h2 mb-3">Both sides are LLMs.</div>
           <p className="text-fg2 leading-relaxed text-sm">
-            OpenEnv-compliant API, eight task suites, four seller personalities,
-            replays. We trained Sauda on this env — the repo is
-            public if you want to train your own. The site is for playing
-            against ours.
+            Sauda (Llama-3.1-8B + LoRA) on the buy side, Gemma-4-E4B on the
+            sell side. Sauda was trained on this env through SFT, GRPO, and
+            RLAIF/DPO — Claude judges pairs of negotiations, the buyer learns
+            from the wins. Strategy improves through self-play, not by hand.
+            Repo is public if you want to train your own.
           </p>
         </div>
       </div>
