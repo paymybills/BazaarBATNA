@@ -656,21 +656,17 @@ function SystemDiagram() {
       <text x="406" y="140" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">persona prompt</text>
       <text x="406" y="152" textAnchor="middle" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85">+ 4 hard rules</text>
 
-      {/* Buyer → Env (top) */}
+      {/* Buyer ↔ Env: pair of arrows, labels placed in the gap between boxes */}
       <line x1="134" y1="100" x2="180" y2="100" stroke="var(--foreground)" strokeOpacity="0.7" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="157" y="93" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">action</text>
-
-      {/* Env → Buyer (bottom) */}
       <line x1="180" y1="140" x2="134" y2="140" stroke="var(--foreground)" strokeOpacity="0.7" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="157" y="156" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">obs + tells</text>
+      <text x="157" y="56" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">action</text>
+      <text x="157" y="196" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">obs + tells</text>
 
-      {/* Env → Seller (top) */}
+      {/* Env ↔ Seller: pair of arrows, labels placed above and below the box pair */}
       <line x1="300" y1="100" x2="346" y2="100" stroke="var(--foreground)" strokeOpacity="0.7" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="323" y="93" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">history</text>
-
-      {/* Seller → Env (bottom) */}
       <line x1="346" y1="140" x2="300" y2="140" stroke="var(--foreground)" strokeOpacity="0.7" strokeWidth="1.2" markerEnd="url(#arrowSys)" />
-      <text x="323" y="156" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">offer + msg</text>
+      <text x="323" y="56" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">history</text>
+      <text x="323" y="196" fontSize="9" fontFamily="monospace" fill="var(--foreground)" opacity="0.85" textAnchor="middle">offer + msg</text>
 
       {/* Tasks (below env, dashed) */}
       <rect x="180" y="210" width="120" height="36" rx="6" fill="var(--background)" stroke="var(--foreground)" strokeOpacity="0.7" strokeWidth="1" strokeDasharray="4 3" />
