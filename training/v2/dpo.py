@@ -125,7 +125,6 @@ def main() -> None:
             learning_rate=LR,
             beta=BETA,
             max_length=MAX_LENGTH,
-            max_prompt_length=MAX_LENGTH // 2,
             logging_steps=5,
             save_strategy="no",
             report_to=[],
