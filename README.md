@@ -17,7 +17,13 @@ BazaarBATNA is an OpenEnv-compliant negotiation environment with two LLM agents 
 
 Both sides infer through asymmetric information. The buyer never sees the seller's reservation. The seller never sees the buyer's budget. **Strategy comes from training, not rules.** The site is for playing against Sauda, watching the arena, or scrubbing replays. The repo is for training your own.
 
-> **Live journal:** [`docs/BLOG.md`](docs/BLOG.md) is the unfiltered hackathon log — bugs, the ablation that disproved our own hypothesis, the goldfish-theater transcript, all the receipts.
+## Submission links
+
+- **HF Space (runnable environment)**: [`PayMyBills/BazaarBATNA`](https://huggingface.co/spaces/PayMyBills/BazaarBATNA)
+- **Trained adapter (Sauda v2)**: [`PayMyBills/bestdealbot-v2`](https://huggingface.co/PayMyBills/bestdealbot-v2)
+- **Eval datasets**: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs) · [`PayMyBills/seller-quality-runs`](https://huggingface.co/datasets/PayMyBills/seller-quality-runs)
+- **Training notebooks**: [`training/train_colab.ipynb`](training/train_colab.ipynb) (SFT+GRPO) · [`training/dpo_colab.ipynb`](training/dpo_colab.ipynb) (DPO/RLAIF)
+- **Mini-blog**: [`docs/BLOG.md`](docs/BLOG.md) — unfiltered hackathon log, bugs, the ablation that disproved our own hypothesis, goldfish-theater transcript, all receipts.
 
 **Stack:**
 
@@ -84,6 +90,42 @@ buyer:  okay 27 — bas yahi ceiling hai
 Hinglish, register-mixed, references market context, applies pressure. The "32 mein de dijiye" → "okay 27" turn is a real bug we're tracking (multi-turn coherence — buyer doesn't carry memory of its own prior agreement). Documented in the blog.
 
 See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for more. Sister landing-page repo: [paymybills/Sauda](https://github.com/paymybills/Sauda).
+
+---
+
+## Training evidence
+
+Sauda v2 was trained through SFT → GRPO. Both stages logged via the TRL `Trainer` class; full `trainer_state.json` + checkpoints live on the HF model repo at [`PayMyBills/bestdealbot-v2`](https://huggingface.co/PayMyBills/bestdealbot-v2/tree/main/last-checkpoint).
+
+### GRPO (latest stage, n=30 optimization steps)
+
+Pulled live from [`last-checkpoint/trainer_state.json`](https://huggingface.co/PayMyBills/bestdealbot-v2/blob/main/last-checkpoint/trainer_state.json):
+
+| Metric | Step 1 | Step 30 | Notes |
+|---|---:|---:|---|
+| GRPO loss | 0.0108 | 0.0220 | low magnitude is expected — GRPO loss is the policy-update term, not a likelihood |
+| Reward (env score) | 0.9663 | **0.9695** | reward held near ceiling, mean over run = 0.9362 |
+| Entropy | 0.510 | 0.420 | policy concentrated as training progressed |
+| Total tokens | — | 57.6k | |
+| Wall time | — | 43m | a10g-largex2 |
+
+The full per-step log is in `trainer_state.json` (30 entries, each with loss / reward / entropy / grad_norm / clip_ratio / step_time). Reward held above 0.93 every step — the model was already near optimal for this reward formulation by the time GRPO started, so the gain is in the *consistency* and the *strategy shape* visible in the scaling-ladder + seller-quality results above, not in headline reward number movement.
+
+### SFT (warmup stage)
+
+LoRA SFT on supervised pairs from rule-based behavior. Adapter shipped on the same repo. Training notebook reproducible at [`training/train_colab.ipynb`](training/train_colab.ipynb).
+
+### DPO (final stage, in flight)
+
+The DPO run is live as we submit. Two parallel HF Jobs (smoke `a100-large` validating the per-pair-checkpoint upload logic + real `l40sx1` producing the v3 adapter) are training against Claude-judged preference pairs. Run logs upload to [`PayMyBills/dpo-runs`](https://huggingface.co/datasets/PayMyBills/dpo-runs) (and `ankur-1232/dpo-runs` for the in-flight smoke). Reproducible via `bash scripts/run_dpo_hfjobs.sh` — the script builds pairs with `eval/build_dpo_pairs.py` (Claude-as-judge), trains via `training/v2/dpo.py` (TRL `DPOTrainer`), and pushes the adapter automatically. The full setback story (`$BUYER_MODEL` typo eating 4hr of rollouts, monotonicity-guard regression, etc.) is in the blog under "the four-hour rollout that bash ate."
+
+### Independent verification
+
+Anyone can pull the trainer state directly:
+
+```bash
+curl -sL "https://huggingface.co/PayMyBills/bestdealbot-v2/raw/main/last-checkpoint/trainer_state.json" | jq '.log_history[0,15,29]'
+```
 
 ---
 
