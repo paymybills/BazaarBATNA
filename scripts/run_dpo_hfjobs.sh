@@ -120,8 +120,13 @@ else
         --max-rounds "$MAX_ROUNDS" \
         --n "$N_PAIRS" \
         --out data/dpo_pairs.jsonl
-    # Mirror the pairs to a dataset repo so future runs can SKIP_PAIR_BUILD=1
-    python - <<PYEOF
+    # Mirror the pairs to a dataset repo so future runs can SKIP_PAIR_BUILD=1.
+    # Use a quoted heredoc + os.environ so unbound shell vars don't kill the
+    # upload (we lost a 4hr rollout once when an unset $BUYER_MODEL bombed
+    # this step under `set -u` *after* the pairs file was already written).
+    PAIRS_COMMIT_MSG="pairs built from ${BUYER_ADAPTER} vs ${SELLER_MODEL}, n=${N_PAIRS}" \
+    PAIRS_HF_REPO="$PAIRS_HF_REPO" \
+    python - <<'PYEOF'
 import os
 from huggingface_hub import HfApi
 api = HfApi()
@@ -132,7 +137,7 @@ api.upload_file(
     path_in_repo="dpo_pairs.jsonl",
     repo_id=repo,
     repo_type="dataset",
-    commit_message=f"pairs built from $BUYER_MODEL vs $SELLER_MODEL, n=$N_PAIRS",
+    commit_message=os.environ.get("PAIRS_COMMIT_MSG", "dpo pairs upload"),
 )
 print(f"Mirrored pairs to https://huggingface.co/datasets/{repo}")
 PYEOF
