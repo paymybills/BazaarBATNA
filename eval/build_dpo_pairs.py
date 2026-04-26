@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any
@@ -351,6 +352,34 @@ def main() -> None:
                 "reason": verdict["reason"],
             })
             print(f"  [{i+1}/{args.n}] {brief['persona']:>10} → winner={verdict['winner']}", flush=True)
+            # Append-flush this pair immediately so a downstream crash (script
+            # bug, OOM, container kill, anything) can never erase the rollouts
+            # we already paid for. We rewrite the whole file each time rather
+            # than open in append mode so the file is always a valid JSONL,
+            # never half-written. This is cheap; pairs are tiny.
+            with open(out_path, "w") as _f_partial:
+                for _pp in pairs:
+                    _f_partial.write(json.dumps(_pp, ensure_ascii=False) + "\n")
+            # Per-pair upload to a dataset repo so we have the rollouts even
+            # if the surrounding bash script dies before its end-of-run upload.
+            # Set PAIRS_HF_REPO to enable; failures here MUST NOT crash the
+            # rollout loop — print and move on.
+            _pairs_repo = os.environ.get("PAIRS_HF_REPO", "").strip()
+            if _pairs_repo:
+                try:
+                    from huggingface_hub import HfApi
+                    _api = HfApi()
+                    _api.create_repo(repo_id=_pairs_repo, repo_type="dataset", exist_ok=True)
+                    _api.upload_file(
+                        path_or_fileobj=out_path,
+                        path_in_repo="dpo_pairs.jsonl",
+                        repo_id=_pairs_repo,
+                        repo_type="dataset",
+                        commit_message=f"checkpoint: {i+1} pairs",
+                    )
+                except Exception as _e:
+                    print(f"  [warn] per-pair upload to {_pairs_repo} failed: "
+                          f"{type(_e).__name__}: {str(_e)[:120]}", flush=True)
             i += 1
 
         with open(out_path, "w") as f:

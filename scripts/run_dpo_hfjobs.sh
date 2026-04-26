@@ -111,6 +111,10 @@ print("Copied to data/dpo_pairs.jsonl")
 PYEOF
 else
     echo "Building $N_PAIRS DPO pairs (judge: Claude-as-judge if ANTHROPIC_API_KEY set, else heuristic)"
+    # Pass PAIRS_HF_REPO into the python step so each accepted pair is checkpoint-uploaded
+    # to the dataset repo right after it's produced. Then if the script crashes after
+    # the rollout loop, we still have every pair we paid for on HF.
+    PAIRS_HF_REPO="$PAIRS_HF_REPO" \
     PYTHONPATH=. python -u eval/build_dpo_pairs.py \
         --buyer-base "$BUYER_BASE" \
         --buyer-adapter "$BUYER_ADAPTER" \
