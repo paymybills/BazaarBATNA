@@ -502,13 +502,18 @@ function Story() {
           </p>
         </div>
         <div>
-          <div className="text-h2 mb-3">Both sides are LLMs.</div>
+          <div className="text-h2 mb-3">Strategy is trained, not prompted.</div>
           <p className="text-fg2 leading-relaxed text-sm">
-            Sauda (Llama-3.1-8B + LoRA) on the buy side, Gemma-4-E4B on the
-            sell side. Sauda was trained on this env through SFT, GRPO, and
-            RLAIF/DPO — Claude judges pairs of negotiations, the buyer learns
-            from the wins. Strategy improves through self-play, not by hand.
-            Repo is public if you want to train your own.
+            The buyer was trained on this env through SFT, GRPO, and RLAIF/DPO.
+            That&apos;s why it negotiates twice as long as base models and
+            captures more surplus per close — the env&apos;s reward shape made
+            it. The repo is public if you want to train your own.{" "}
+            <a
+              href="#training"
+              className="text-accent hover:text-foreground underline-offset-4 hover:underline transition-colors"
+            >
+              How it&apos;s trained →
+            </a>
           </p>
         </div>
       </div>
