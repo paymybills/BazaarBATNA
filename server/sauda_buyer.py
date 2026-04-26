@@ -35,6 +35,14 @@ from bazaarbot_env import (
     steer_bayesian_action,
 )
 
+from .safety import (
+    HFCallDenied,
+    acquire_hf_slot,
+    check_prompt_size,
+    note_fallback,
+    release_hf_slot,
+)
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -135,15 +143,19 @@ def sauda_action(
     *,
     backend: Optional[str] = None,
     use_steering: bool = True,
+    client_ip: Optional[str] = None,
 ) -> dict[str, Any]:
     """Get a buyer action from Sauda v2.
 
     Returns dict with keys: action ("offer"|"accept"|"walk"), price (float|None),
     message (str), backend (str echoing which path served), error (str if any).
 
-    Never raises — falls back to a conservative offer if the LLM is unreachable
-    or returns garbage. The /sell page is interactive and a 500 mid-demo is
-    worse than a dumb fallback.
+    Never raises — falls back through HF → ollama → rule. The /sell page is
+    interactive and a 500 mid-demo is worse than a dumb fallback.
+
+    Safety gates (rate/spend/concurrency caps) wrap the HF path; if any trips,
+    we silently downgrade to ollama and don't tell the user. `client_ip` is
+    used for per-IP rate-limiting; pass None for trusted server-internal calls.
     """
     chosen = (backend or os.environ.get("SAUDA_BACKEND") or "hf").lower()
     system, user = _build_prompt(obs_dict)
@@ -151,18 +163,56 @@ def sauda_action(
     text = ""
     err: Optional[str] = None
     served_by = chosen
+
+    def _try_hf() -> str:
+        """HF path with safety gates. Raises on any failure (caller falls back)."""
+        check_prompt_size(system + user)
+        acquire_hf_slot(client_ip=client_ip)
+        ok = False
+        try:
+            out = _hf_chat(system, user)
+            ok = True
+            return out
+        finally:
+            release_hf_slot(success=ok)
+
+    def _try_ollama() -> str:
+        out = _ollama_chat(system, user)
+        note_fallback("ollama")
+        return out
+
     try:
         if chosen == "hf":
-            text = _hf_chat(system, user)
+            text = _try_hf()
         elif chosen == "ollama":
-            text = _ollama_chat(system, user)
+            text = _try_ollama()
         elif chosen == "rule":
+            note_fallback("rule")
             text = ""  # forces fallback path below
         else:
             raise RuntimeError(f"unknown SAUDA_BACKEND: {chosen}")
+    except HFCallDenied as e:
+        # Safety gate tripped. Silently downgrade to ollama; if that fails too,
+        # the rule-based fallback below kicks in.
+        err = f"hf gated ({e.gate}); using ollama"
+        served_by = "ollama"
+        try:
+            text = _try_ollama()
+        except Exception as e2:
+            err = f"hf gated ({e.gate}); ollama also failed: {type(e2).__name__}"
+            served_by = "rule"
+            note_fallback("rule")
     except Exception as e:
         err = f"{chosen} backend failed: {type(e).__name__}: {str(e)[:160]}"
-        served_by = f"{chosen}+fallback"
+        served_by = "ollama" if chosen == "hf" else f"{chosen}+fallback"
+        # If primary was HF, try ollama before giving up.
+        if chosen == "hf":
+            try:
+                text = _try_ollama()
+            except Exception as e2:
+                err = f"hf failed; ollama also failed: {type(e2).__name__}"
+                served_by = "rule"
+                note_fallback("rule")
 
     fallback_price = float(obs_dict.get("own_private_budget") or 100) * 0.3
     if text:
@@ -230,4 +280,10 @@ def health() -> dict[str, Any]:
     except Exception as e:
         out["ollama_ok"] = False
         out["ollama_error"] = f"{type(e).__name__}: {str(e)[:120]}"
+    # Safety / spend stats (ops use only — don't expose details to UI).
+    try:
+        from .safety import stats as _safety_stats
+        out["safety"] = _safety_stats()
+    except Exception:
+        pass
     return out

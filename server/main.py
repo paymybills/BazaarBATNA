@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -90,6 +91,20 @@ class ArenaStepRequest(BaseModel):
 
 
 # ── App state ─────────────────────────────────────────────────────
+
+def _client_ip(request: Request) -> Optional[str]:
+    """Best-effort client IP for rate-limiting. Honors X-Forwarded-For when
+    deployed behind a proxy/CDN; falls back to direct socket peer.
+
+    Note: in untrusted environments XFF can be spoofed. Hosting plan today
+    is direct uvicorn or behind a single-hop reverse proxy we control, so
+    trusting the leftmost XFF entry is acceptable.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip() or None
+    return request.client.host if request.client else None
+
 
 _envs: dict[str, BazaarEnvironment] = {}
 _arenas: dict[str, MultiBuyerArena] = {}
@@ -381,10 +396,25 @@ async def highlight(req: HighlightRequest):
 
 
 @app.get("/sauda/health")
-async def sauda_health():
-    """Probe both backends. Used to choose strategy and surface config errors."""
-    from .sauda_buyer import health
-    return health()
+async def sauda_health(request: Request):
+    """Probe both backends. Used to choose strategy and surface config errors.
+
+    Public response is intentionally minimal: just a green/red signal.
+    For the full ops view (spend, rate-limit hits, circuit-breaker state),
+    pass the X-Sauda-Admin header matching SAUDA_ADMIN_TOKEN env-var.
+    """
+    from .sauda_buyer import health as _full_health
+    full = _full_health()
+    admin_token = os.environ.get("SAUDA_ADMIN_TOKEN", "").strip()
+    is_admin = bool(admin_token) and request.headers.get("x-sauda-admin", "") == admin_token
+    if is_admin:
+        return full
+    # Public view: only the bits a UI needs to decide whether the live agent
+    # is reachable. No spend numbers, no IP counts, no circuit breaker state.
+    return {
+        "status": "ok" if (full.get("hf_ok") or full.get("ollama_ok")) else "degraded",
+        "live_agent_available": bool(full.get("hf_ok") or full.get("ollama_ok")),
+    }
 
 
 @app.get("/sauda/backends")
@@ -425,20 +455,29 @@ class SellerModeStepRequest(BaseModel):
     price: float
 
 
-def _ai_buyer_action(obs: BazaarObservation, strategy: str, rng) -> BazaarAction:
+def _ai_buyer_action(
+    obs: BazaarObservation,
+    strategy: str,
+    rng,
+    *,
+    client_ip: Optional[str] = None,
+) -> BazaarAction:
     """Built-in AI buyer strategies for spectator / seller mode.
 
     `strategy` values:
       - "sauda" / "sauda_hf"  → HF Inference Endpoint serving Sauda v2
       - "sauda_ollama"        → local ollama serving Sauda v2
       - "smart" / "naive" / "aggressive" → rule-based heuristics (no LLM)
+
+    `client_ip` is forwarded to the safety layer for per-IP rate-limiting on
+    the metered HF backend; pass None for trusted server-internal callers.
     """
     # Live Sauda v2 path (HF endpoint primary, Ollama fallback selectable)
     if strategy in ("sauda", "sauda_hf", "sauda_ollama"):
         from .sauda_buyer import sauda_action
         backend = "ollama" if strategy == "sauda_ollama" else "hf"
         obs_dict = obs.model_dump() if hasattr(obs, "model_dump") else obs.dict()
-        result = sauda_action(obs_dict, backend=backend)
+        result = sauda_action(obs_dict, backend=backend, client_ip=client_ip)
         action_str = result.get("action", "offer")
         price = result.get("price")
         msg = result.get("message", "")
@@ -652,7 +691,7 @@ class SellerModeResetRequest(BaseModel):
 
 
 @app.post("/seller-mode/reset")
-async def seller_mode_reset(req: SellerModeResetRequest):
+async def seller_mode_reset(req: SellerModeResetRequest, request: Request):
     """Start a seller-mode session. User plays as seller, AI plays as buyer."""
     if req.task not in TASKS:
         raise HTTPException(status_code=400, detail=f"Unknown task: {req.task}")
@@ -705,7 +744,8 @@ async def seller_mode_reset(req: SellerModeResetRequest):
     )
 
     # AI buyer makes first offer
-    action = _ai_buyer_action(obs, req.strategy, session["rng"])
+    client_ip = _client_ip(request)
+    action = _ai_buyer_action(obs, req.strategy, session["rng"], client_ip=client_ip)
     session["round"] = 1
     session["last_buyer_offer"] = action.price
     sauda_msg = getattr(action, "sauda_message", None) or ""
@@ -737,8 +777,6 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         "buyer_price": action.price,
         "message": sauda_msg or fallback_msg,
         "buyer_message": sauda_msg,
-        "buyer_backend": sauda_backend,
-        "buyer_error": sauda_error,
         "your_opening": req.opening_price,
         "history": session["history"],
         "done": False,
@@ -746,7 +784,7 @@ async def seller_mode_reset(req: SellerModeResetRequest):
 
 
 @app.post("/seller-mode/step")
-async def seller_mode_step(req: SellerModeStepRequest):
+async def seller_mode_step(req: SellerModeStepRequest, request: Request):
     """User (as seller) sets counteroffer price. AI buyer responds."""
     if "seller_mode" not in _envs:
         raise HTTPException(status_code=400, detail="No seller-mode session. Call /seller-mode/reset first.")
@@ -817,7 +855,8 @@ async def seller_mode_step(req: SellerModeStepRequest):
         }
 
     # AI buyer responds
-    action = _ai_buyer_action(obs, session["strategy"], session["rng"])
+    client_ip = _client_ip(request)
+    action = _ai_buyer_action(obs, session["strategy"], session["rng"], client_ip=client_ip)
 
     if action.action in ("accept", ActionType.ACCEPT):
         session["done"] = True
@@ -843,7 +882,6 @@ async def seller_mode_step(req: SellerModeStepRequest):
             "buyer_message": sauda_msg,
             "buyer_action": "accept",
             "buyer_price": seller_price,
-            "buyer_backend": sauda_backend,
             "done": True,
             "outcome": "deal",
             "agreed_price": seller_price,
@@ -872,7 +910,6 @@ async def seller_mode_step(req: SellerModeStepRequest):
             "buyer_message": sauda_msg,
             "buyer_action": "walk",
             "buyer_price": None,
-            "buyer_backend": sauda_backend,
             "done": True,
             "outcome": "walk",
             "history": session["history"],
@@ -897,8 +934,6 @@ async def seller_mode_step(req: SellerModeStepRequest):
             "buyer_message": sauda_msg,
             "buyer_action": "offer",
             "buyer_price": action.price,
-            "buyer_backend": sauda_backend,
-            "buyer_error": sauda_error,
             "done": False,
             "history": session["history"],
         }

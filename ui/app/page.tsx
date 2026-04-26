@@ -747,7 +747,7 @@ function Architecture() {
           <StackRow
             num="4"
             title="Live serving"
-            body="Two interchangeable backends: HF Inference Endpoint (production) or local Ollama (fallback / dev). /sauda/health probes both. If the active backend fails, the server falls back to a rule-based offer with a Hinglish template message — degraded but never broken."
+            body="Layered backends: a hot HF Inference Endpoint serves the model at production latency, with a local Ollama runtime as a warm secondary and rule-based heuristics as a guaranteed floor. The router degrades gracefully and silently — every request gets a sane buyer, every time. Per-IP rate limits, concurrency caps and a daily spend ceiling sit in front of the metered path so the demo can't be drained."
           />
         </div>
       </div>
