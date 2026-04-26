@@ -48,7 +48,10 @@ if [ -z "${HF_TOKEN:-}" ]; then
     echo "             HF_TOKEN=hf_xxx bash scripts/run_sft_tells_hfjobs.sh" >&2
 fi
 
-# Default REPO_ID and RESULTS_REPO to the token-owner's namespace if not set
+# Default REPO_ID and RESULTS_REPO to the active account's namespace if not set.
+# Reads the cached `hf auth login` identity first; if HF_TOKEN env-var is also
+# set, queries the API directly with that token (the env-var wins for HF Jobs
+# submission, so that's the account the run will land in).
 if [ -z "${REPO_ID:-}" ] || [ -z "${RESULTS_REPO:-}" ]; then
     USERNAME=""
     if [ -n "${HF_TOKEN:-}" ]; then
@@ -57,7 +60,15 @@ if [ -z "${REPO_ID:-}" ] || [ -z "${RESULTS_REPO:-}" ]; then
             python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
     fi
     if [ -z "$USERNAME" ]; then
-        USERNAME="PayMyBills"  # fallback
+        # Fall back to the cached login (no API call → no rate-limit risk)
+        USERNAME=$(hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+    fi
+    if [ -z "$USERNAME" ]; then
+        echo "ERROR: could not resolve HF username. Either:" >&2
+        echo "  - run 'hf auth login' first, OR" >&2
+        echo "  - prefix with HF_TOKEN=hf_xxx, OR" >&2
+        echo "  - set REPO_ID + RESULTS_REPO env-vars explicitly" >&2
+        exit 1
     fi
     REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
     RESULTS_REPO="${RESULTS_REPO:-${USERNAME}/sft-tells-runs}"

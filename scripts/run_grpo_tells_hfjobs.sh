@@ -33,7 +33,7 @@ if [ -z "${HF_TOKEN:-}" ]; then
     echo "WARNING: HF_TOKEN not set. Using cached `hf auth login` identity." >&2
 fi
 
-# Default REPO_ID and SFT_HF_REPO to the token-owner's namespace
+# Default REPO_ID and SFT_HF_REPO to the active account's namespace.
 USERNAME=""
 if [ -n "${HF_TOKEN:-}" ]; then
     USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
@@ -41,7 +41,11 @@ if [ -n "${HF_TOKEN:-}" ]; then
         python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
 fi
 if [ -z "$USERNAME" ]; then
-    USERNAME="PayMyBills"
+    USERNAME=$(hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+fi
+if [ -z "$USERNAME" ]; then
+    echo "ERROR: could not resolve HF username. 'hf auth login' or set HF_TOKEN." >&2
+    exit 1
 fi
 SFT_HF_REPO="${SFT_HF_REPO:-${USERNAME}/bestdealbot-v2-tells}"
 REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
