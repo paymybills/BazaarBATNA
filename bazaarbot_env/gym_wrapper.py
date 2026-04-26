@@ -387,6 +387,16 @@ def steer_bayesian_action(
         proposed_price = (floor_offer + ceiling_offer) / 2
     proposed_price = float(proposed_price)
     steered_price = max(floor_offer, min(ceiling_offer, proposed_price))
+    # Buyer offers must move monotonically toward seller. If the model proposes
+    # a price below our previous offer (which the seller has already implicitly
+    # rejected by countering), bump up to at least last + a small concession
+    # toward the seller's ask. Without this the buyer can slide *backward*
+    # mid-negotiation, which sellers correctly read as either incoherent or
+    # bad-faith.
+    if own_last_offer is not None and steered_price < own_last_offer:
+        gap = max(0.0, ask - own_last_offer)
+        bump = max(1.0, gap * 0.15)
+        steered_price = min(ceiling_offer, own_last_offer + bump)
     action["price"] = round(steered_price, 2)
     action["action"] = "offer"
     return _finalize(action)
