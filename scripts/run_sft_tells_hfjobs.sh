@@ -34,7 +34,7 @@
 
 set -eo pipefail
 
-FLAVOR="${FLAVOR:-a10g-large}"
+FLAVOR="${FLAVOR:-a10g-largex2}"  # 2x A10G, 48GB VRAM. Tight on 1x for 8B SFT, doubling for safety.
 N_TRAIN="${N_TRAIN:-1024}"
 SEED="${SEED:-42}"
 BASE_MODEL="${BASE_MODEL:-unsloth/Meta-Llama-3.1-8B-Instruct}"

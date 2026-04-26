@@ -21,7 +21,7 @@
 
 set -eo pipefail
 
-FLAVOR="${FLAVOR:-a10g-large}"
+FLAVOR="${FLAVOR:-a10g-largex2}"  # 2x A10G, 48GB VRAM. GRPO needs ref-model + policy in memory.
 N_PROMPTS="${N_PROMPTS:-128}"
 MAX_STEPS="${MAX_STEPS:-30}"
 SEED="${SEED:-0}"
