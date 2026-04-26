@@ -23,7 +23,7 @@ Both sides infer through asymmetric information. The buyer never sees the seller
 
 - Training: SFT → GRPO → **RLAIF/DPO** (Claude judges preference pairs, buyer learns from the wins)
 - Inference: HF Inference Endpoint primary, Ollama fallback, dual-backend with `/sauda/health`
-- Bayesian seller-tell steering on top of the raw model action
+- 12-signal seller-tells observation channel + Bayesian steering — kept as substrate for future in-loop training (current ablation: net-negative at inference time, see below)
 - OpenEnv-compliant FastAPI server (`/reset`, `/step`, `/state`, `/score`, `/tasks`)
 
 ## Headline results
@@ -32,12 +32,11 @@ Both sides infer through asymmetric information. The buyer never sees the seller
 
 A clean controlled comparison: same seller (Gemma-4-E4B), same seeds, same tasks, three different buyer policies. n=30 episodes per task.
 
-| Buyer | Tells | single_deal | asymmetric | amazon | **Mean** | Deal rate | Rounds |
-|---|---|---:|---:|---:|---:|---:|---:|
-| Llama-3.2-3B base | ON | 0.722 | 0.731 | 0.258 | **0.570** | 1.00 | 2.2 |
-| Llama-3.1-8B base | ON | 0.818 | 0.787 | 0.430 | **0.678** | 0.99 | 3.1 |
-| **Sauda v2** (8B SFT+GRPO) | OFF | 0.835 | 0.827 | 0.521 | **0.728** | 0.91 | 6.0 |
-| **Sauda v2** (8B SFT+GRPO) | ON | 0.810 | 0.768 | 0.507 | **0.695** | 0.88 | 6.0 |
+| Buyer | single_deal | asymmetric | amazon | **Mean** | Deal rate | Rounds |
+|---|---:|---:|---:|---:|---:|---:|
+| Llama-3.2-3B base | 0.722 | 0.731 | 0.258 | **0.570** | 1.00 | 2.2 |
+| Llama-3.1-8B base | 0.818 | 0.787 | 0.430 | **0.678** | 0.99 | 3.1 |
+| **Sauda v2** (8B SFT+GRPO) | **0.835** | **0.827** | **0.521** | **0.728** | 0.91 | 6.0 |
 
 **Reading this:**
 - Scaling 3B → 8B base buys you +19% mean surplus.
@@ -45,17 +44,6 @@ A clean controlled comparison: same seller (Gemma-4-E4B), same seeds, same tasks
 - Sauda's deal rate (0.91) is a feature, not a bug — Sauda walks when offers are bad. Base models close any deal regardless of value.
 
 Datasets: [`PayMyBills/scaling-eval-runs`](https://huggingface.co/datasets/PayMyBills/scaling-eval-runs)
-
-### Tells ablation — honest negative result
-
-We built an entire seller-tells channel (rule-based pattern matcher, Bayesian steering, ministral-based extractor) and ran the ablation expecting a win. We didn't get one.
-
-| Setting | Mean surplus | Deal rate | Mean rounds |
-|---|---:|---:|---:|
-| Sauda v2 / **tells OFF** | **0.728** | 0.91 | 6.0 |
-| Sauda v2 / tells ON | 0.695 | 0.88 | 6.0 |
-
-The tells channel adds noise on every task. Reported as-is. Future work: train Sauda *with* tells in-loop instead of bolting them on at inference time. Full discussion in [`docs/BLOG.md`](docs/BLOG.md).
 
 ### Seller quality — 5 of 6 acceptance criteria pass
 
@@ -96,6 +84,25 @@ buyer:  okay 27 — bas yahi ceiling hai
 Hinglish, register-mixed, references market context, applies pressure. The "32 mein de dijiye" → "okay 27" turn is a real bug we're tracking (multi-turn coherence — buyer doesn't carry memory of its own prior agreement). Documented in the blog.
 
 See [`SAMPLE_NEGOTIATIONS.md`](SAMPLE_NEGOTIATIONS.md) for more. Sister landing-page repo: [paymybills/Sauda](https://github.com/paymybills/Sauda).
+
+---
+
+## Ablations & negative results
+
+We ran the ablations we promised. One of them came back negative. We're keeping it.
+
+### Inference-time tells channel: doesn't help (yet)
+
+We built a seller-tells channel (12 signals, rule-based pattern matcher, Bayesian steering, optional Ministral extractor) and bolted it on at *inference time* — Sauda was not trained against it. The ablation:
+
+| Setting | Mean surplus | Deal rate | Mean rounds |
+|---|---:|---:|---:|
+| Sauda v2 / **tells OFF** | **0.728** | 0.91 | 6.0 |
+| Sauda v2 / tells ON | 0.695 | 0.88 | 6.0 |
+
+Tells ON underperforms on every task by 1-6%. The diagnosis is that bolt-on signals at inference don't help a buyer that never trained against them — the steering moves prices in directions Sauda didn't learn to compensate for. **The channel and infrastructure remain in the codebase as a substrate for future work** (`enable_nlp` flag, `nlp/keyword_patterns.py`, Ministral extractor). The natural next step is in-loop training: include tells observations during GRPO/DPO so the buyer learns to use them. Full discussion in [`docs/BLOG.md`](docs/BLOG.md).
+
+This is a deliberate choice to report rather than bury. The negative result is the kind of thing that gets quietly dropped from most submissions; we'd rather show the work.
 
 ---
 
