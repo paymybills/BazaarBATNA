@@ -34,18 +34,22 @@ if [ -z "${HF_TOKEN:-}" ]; then
 fi
 
 # Default REPO_ID and SFT_HF_REPO to the active account's namespace.
-USERNAME=""
-if [ -n "${HF_TOKEN:-}" ]; then
-    USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
-        https://huggingface.co/api/whoami-v2 2>/dev/null | \
-        python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
-fi
-if [ -z "$USERNAME" ]; then
-    USERNAME=$(hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
-fi
-if [ -z "$USERNAME" ]; then
-    echo "ERROR: could not resolve HF username. 'hf auth login' or set HF_TOKEN." >&2
-    exit 1
+# If the caller pre-set USERNAME or any of the *_REPO env-vars, skip the
+# whoami round-trip entirely (it hits HF API rate limits during heavy use).
+if [ -z "${USERNAME:-}" ] && [ -z "${SFT_HF_REPO:-}" ] && [ -z "${REPO_ID:-}" ] && [ -z "${RESULTS_REPO:-}" ]; then
+    if [ -n "${HF_TOKEN:-}" ]; then
+        USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            https://huggingface.co/api/whoami-v2 2>/dev/null | \
+            python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
+    fi
+    if [ -z "$USERNAME" ]; then
+        USERNAME=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+    fi
+    if [ -z "$USERNAME" ]; then
+        echo "ERROR: could not resolve HF username." >&2
+        echo "       Set USERNAME=<your-hf-username> or pass *_REPO env-vars explicitly." >&2
+        exit 1
+    fi
 fi
 SFT_HF_REPO="${SFT_HF_REPO:-${USERNAME}/bestdealbot-v2-tells}"
 REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"

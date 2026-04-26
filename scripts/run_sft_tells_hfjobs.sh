@@ -49,25 +49,22 @@ if [ -z "${HF_TOKEN:-}" ]; then
 fi
 
 # Default REPO_ID and RESULTS_REPO to the active account's namespace if not set.
-# Reads the cached `hf auth login` identity first; if HF_TOKEN env-var is also
-# set, queries the API directly with that token (the env-var wins for HF Jobs
-# submission, so that's the account the run will land in).
+# Skips the whoami round-trip when caller supplies USERNAME or *_REPO directly
+# (the whoami endpoint rate-limits aggressively during heavy use).
 if [ -z "${REPO_ID:-}" ] || [ -z "${RESULTS_REPO:-}" ]; then
-    USERNAME=""
-    if [ -n "${HF_TOKEN:-}" ]; then
-        USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
-            https://huggingface.co/api/whoami-v2 2>/dev/null | \
-            python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
+    if [ -z "${USERNAME:-}" ]; then
+        if [ -n "${HF_TOKEN:-}" ]; then
+            USERNAME=$(curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+                https://huggingface.co/api/whoami-v2 2>/dev/null | \
+                python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))" 2>/dev/null || echo "")
+        fi
+        if [ -z "$USERNAME" ]; then
+            USERNAME=$(timeout 5 hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
+        fi
     fi
     if [ -z "$USERNAME" ]; then
-        # Fall back to the cached login (no API call → no rate-limit risk)
-        USERNAME=$(hf auth whoami 2>/dev/null | sed -n 's/^user=//p' | head -1)
-    fi
-    if [ -z "$USERNAME" ]; then
-        echo "ERROR: could not resolve HF username. Either:" >&2
-        echo "  - run 'hf auth login' first, OR" >&2
-        echo "  - prefix with HF_TOKEN=hf_xxx, OR" >&2
-        echo "  - set REPO_ID + RESULTS_REPO env-vars explicitly" >&2
+        echo "ERROR: could not resolve HF username." >&2
+        echo "       Set USERNAME=<your-hf-username> or pass REPO_ID+RESULTS_REPO explicitly." >&2
         exit 1
     fi
     REPO_ID="${REPO_ID:-${USERNAME}/bestdealbot-v2-tells}"
