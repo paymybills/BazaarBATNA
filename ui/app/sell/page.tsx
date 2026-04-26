@@ -402,10 +402,14 @@ export default function SellPage() {
         message: string;
         history: HistoryEntry[];
       }>("/seller-mode/reset", {
-        task: "amazon_realistic",
+        // single_deal is the canonical seller-mode task; the server scales
+        // budget/cost from opening_price so any listing magnitude works.
+        task: "single_deal",
         strategy: "sauda",  // HF endpoint primary; server falls back to rule if unconfigured
         seed: Math.floor(Math.random() * 10000),
         opening_price: brief.asking_price,
+        item_name: currentListing.title,
+        listing_price: currentListing.listed_price,
       });
 
       setHistory(res.history);
@@ -420,7 +424,21 @@ export default function SellPage() {
       setCurrentTells(generateTells(1, res.buyer_price));
       setTickerMessages([]);
     } catch (e) {
-      setMessages([{ text: `Error: ${e}`, type: "error" }]);
+      // Render the error to the chat so the user can see why the buyer
+      // didn't respond — otherwise the page just sits in a "loading then
+      // nothing" state and the error is invisible in the dev console.
+      setMessages([
+        { text: `You list "${currentListing.title}" at $${brief.asking_price}.`, type: "system" },
+        { text: `Buyer never responded. Backend error: ${String(e)}`, type: "error" },
+      ]);
+      setStarted(true);
+      setDone(true);
+      setResult({
+        outcome: "error",
+        agreed_price: null,
+        buyer_score: 0,
+        seller_profit: 0,
+      });
     }
     setLoading(false);
   }, [brief, currentListing]);

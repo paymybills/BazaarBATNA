@@ -647,6 +647,8 @@ class SellerModeResetRequest(BaseModel):
     strategy: str = "smart"
     seed: Optional[int] = None
     opening_price: float = 60.0
+    item_name: Optional[str] = None
+    listing_price: Optional[float] = None  # if user picked a real listing, this is its MRP
 
 
 @app.post("/seller-mode/reset")
@@ -656,6 +658,22 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         raise HTTPException(status_code=400, detail=f"Unknown task: {req.task}")
 
     task = copy.deepcopy(TASKS[req.task])
+
+    # Tasks have hardcoded buyer_budget / seller_cost from synthetic examples.
+    # When the user opens at a real-listing price ($2695 for an iPhone, $399
+    # for a sofa, etc) those numbers become nonsense and Sauda offers $30 on
+    # a $2695 ask. Anchor the scale on the task's *opening price prior* —
+    # buyer_budget = 1.67×ask in single_deal (60 → 100), and the relative
+    # ratios (cost / budget ≈ 0.35, ask / budget ≈ 0.6) hold across tasks.
+    # Derive sane budget/cost from the user's actual opening_price using those
+    # ratios so the buyer's model of the deal scales with the listing.
+    if req.opening_price and req.opening_price > 0:
+        scaled_budget = float(req.opening_price) * 1.05   # buyer can stretch ~5% above ask
+        scaled_cost = float(req.opening_price) * 0.35     # seller's true cost ~35% of ask
+    else:
+        scaled_budget = task.buyer_budget
+        scaled_cost = task.seller_cost
+
     # Store seller mode state
     import random
     session = {
@@ -664,8 +682,8 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         "rng": random.Random(req.seed),
         "round": 0,
         "max_rounds": task.max_steps if task.total_episodes == 1 else task.max_steps // task.total_episodes,
-        "buyer_budget": task.buyer_budget,
-        "seller_cost": task.seller_cost,
+        "buyer_budget": scaled_budget,
+        "seller_cost": scaled_cost,
         "current_seller_price": req.opening_price,
         "last_buyer_offer": None,
         "history": [],
@@ -679,10 +697,10 @@ async def seller_mode_reset(req: SellerModeResetRequest):
         current_round=0,
         max_rounds=session["max_rounds"],
         opponent_last_offer=req.opening_price,
-        own_private_budget=task.buyer_budget,
+        own_private_budget=scaled_budget,
         rounds_remaining=session["max_rounds"],
         seller_asking_price=req.opening_price,
-        item_name="handwoven silk scarf",
+        item_name=req.item_name or "handwoven silk scarf",
         message=f"You open at {req.opening_price:.0f} rupees.",
     )
 
